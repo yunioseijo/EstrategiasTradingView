@@ -1,0 +1,28 @@
+//@version=4
+// A Cumulative Volume Delta approach based on the Bull and Bear Balance Indicator by Vadim Gimelfarb published in the October 2003 issue of the S&C Magazine.
+// Adjust the length of the moving average according to your needs (Symbol, Timeframe, etc.)
+
+study(title="Cumulative Volume Delta", shorttitle="CVD", precision=0)
+
+// Inputs
+periodMa = input(title="MA Length", minval=1, defval=100)
+plotMa = input(title="Plot MA?", defval=false)
+
+// Calculations (Bull & Bear Balance Indicator by Vadim Gimelfarb)
+bullPower = iff(close < open, iff(close[1] < open, max(high - close[1], close - low), max(high - open, close - low)), iff(close > open, iff(close[1] > open,  high - low, max(open - close[1], high - low)), iff(high - close > close - low, iff(close[1] < open, max(high - close[1], close - low), high - open), iff(high - close < close - low, iff(close[1] > open, high - low, max(open - close[1], high - low)), iff(close[1] > open, max(high - open, close - low), iff(close[1] < open, max(open - close[1], high - low), high-low))))))
+bearPower = iff(close < open, iff(close[1] > open, max(close[1] - open, high - low), high - low), iff(close > open, iff(close[1] > open, max(close[1] - low, high - close), max(open - low, high - close)), iff(high - close > close - low, iff(close[1] > open, max(close[1] - open, high - low), high - low), iff(high - close < close - low, iff(close[1] > open, max(close[1] - low, high - close), open - low), iff(close[1] > open, max(close[1] - open, high - low), iff(close[1] < open, max(open - low, high - close), high - low))))))
+
+// Calculations (Bull & Bear Pressure Volume)
+bullVolume = (bullPower / (bullPower + bearPower)) * volume
+bearVolume = (bearPower / (bullPower + bearPower)) * volume
+
+// Calculations Delta
+delta = bullVolume - bearVolume
+cvd = cum(delta)
+cvdMa = sma(cvd, periodMa)
+
+// Plotting
+customColor = cvd > cvdMa ? color.new(color.teal, 50) : color.new(color.red, 50)
+plotRef1 = plot(cvd, style=plot.style_line, linewidth=1, color=color.black, title="CVD")
+plotRef2 = plot(plotMa ? cvdMa: na, style=plot.style_line, linewidth=1, color=color.new(color.black, 0), title="CVD MA")
+fill(plotRef1, plotRef2, color=customColor)

@@ -1,0 +1,25 @@
+//@version=4
+study(title="Rate Of Change", shorttitle="Sidd ROC", format=format.price, precision=2, resolution="")
+length = input(21, minval=1)
+lengthEMA = input(9, minval=1)
+source = input(close, "Source", type = input.source)
+upColor = input(#156A99, "Color Up")
+dnColor = input(#6B1599, "Color Down")
+f_normGradientColor(_series, _crossesZero, _colorNormLen, _dnColor, _upColor) =>
+    _dnValue = _crossesZero?-100:0
+    _mult = 0.0
+    _lowest = lowest(_colorNormLen)
+    _highest = highest(_colorNormLen)
+    _diff1 = close - _lowest
+    _diff2 = _highest - _lowest
+    if _diff2 > 0
+        _mult := _diff1 / _diff2 * 100
+    color.from_gradient(sign(_series) * _mult, _dnValue, 100, _dnColor, _upColor)
+roc = 100 * (source - source[length])/source[length]
+col = f_normGradientColor(roc, true, length, dnColor, upColor)
+plot(roc, color=col, title="ROC")
+emaROC=ema(roc,lengthEMA)
+plot(emaROC,color=emaROC>0?color.green:color.red, title="ROC EMA",linewidth=2)
+hline(0, color=color.white, title="Zero Line")
+hline(5,title="resistance line", linestyle=hline.style_dotted, color=color.teal, linewidth=2)
+hline(-5,title="support line", linestyle=hline.style_dotted, color=color.teal, linewidth=2)

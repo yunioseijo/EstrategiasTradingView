@@ -1,0 +1,48 @@
+//@version=4
+study(title = "Cumulative Volume Oscillator", shorttitle = "CVO")
+ema1len = input(defval = 8, title = "EMA 1 Length", minval = 1)
+ema2len = input(defval = 21, title = "EMA 1 Length", minval = 1)
+cvtype = input(defval = "OBV", options = ["OBV", "CVD", "PVT"])
+signal_len = input(defval = 13, title = "Signal")
+
+upColor = input(color.rgb(0,200,255), "Color Up")
+dnColor = input(color.rgb(255,0,85), "Color Down")
+scol = input(color.rgb(255,255,255,55), "Signal Color")
+f_normGradientColor(_series, _crossesZero, _colorNormLen, _dnColor, _upColor) =>
+    _dnValue = _crossesZero?-100:0
+    _mult = 0.0
+    _lowest = lowest(_colorNormLen)
+    _highest = highest(_colorNormLen)
+    _diff1 = close - _lowest
+    _diff2 = _highest - _lowest
+    if _diff2 > 0
+        _mult := _diff1 / _diff2 * 100
+    color.from_gradient(sign(_series) * _mult, _dnValue, 100, _dnColor, _upColor)
+
+
+tw = high - max(open, close) 
+bw = min(open, close) - low 
+body = abs(close - open) 
+
+_rate(cond) =>
+    ret = 0.5 * (tw + bw + (cond ? 2 * body : 0)) / (tw + bw + body) 
+    ret := nz(ret) == 0 ? 0.5 : ret
+    ret
+    
+deltaup =  volume * _rate(open <= close) 
+deltadown = volume * _rate(open > close)
+delta = close >= open ? deltaup : -deltadown
+cumdelta = cum(delta)
+float ctl = na
+ctl := cumdelta
+cv = cvtype == "OBV"? obv : cvtype == "CVD"? ctl : pvt
+ema1 = ema(cv,ema1len)
+ema2 = ema(cv,ema2len)
+cdv_osc = ema1 - ema2 
+sig = ema(cdv_osc, signal_len)
+style = plot.style_histogram 
+col = f_normGradientColor(cdv_osc, true, int(avg(ema1len, ema2len)), dnColor, upColor)
+hline(0, title="Zero")
+plot(cdv_osc, title = "CVO Histogram", color = col, style = style, linewidth = 2)
+plot(cdv_osc, title = "CVO Line", color = col, linewidth = 1)
+plot(sig, title = "Signal Line", color = scol, linewidth = 1)

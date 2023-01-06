@@ -1,0 +1,170 @@
+//@version=4
+strategy("Strat Fibo", overlay=true, max_bars_back=5000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.1, initial_capital=1000)
+
+// parametros media moviles
+
+comprar_fibo            = input(defval = true,  title = "Comprar retroceso de fibonacci", group="comprar retroceso de fibonacci")
+per                     = input(defval=45,      title="Calculate for last bars", group="comprar retroceso de fibonacci")
+orden_compra =          input(defval="Fib 50", title="Porcentaje de retroceso", options=["Fib 38", "Fib 50", "Fib 61", "Fib 78", "Fib 1"], group="comprar retroceso de fibonacci")
+dias_retroc                     = input(defval=15,      title="Dias permitidos de retroceso", group="comprar retroceso de fibonacci")
+dias_entre_compra                     = input(defval=15,      title="Velas entre compras", group="comprar retroceso de fibonacci")
+porcent_max_min                     = input(defval=30,      title="Porcentaje entre el maximo y minimo", group="comprar retroceso de fibonacci")
+salvar_profit_bool_porcent       = input(defval = false, title="----Proteger profit cuando alcance %----", group="comprar retroceso de fibonacci")
+salvar_profit_porcent   = input(defval =15, title="TP1", inline = "2",  group="comprar retroceso de fibonacci")
+mover_stop        = input(defval=1, title="Mover el stop a...",inline = "2", group="comprar retroceso de fibonacci")
+
+salvar_profit_bool_porcent_2       = input(defval = false, title="----Proteger profit 2 cuando alcance %----", group="comprar retroceso de fibonacci")
+salvar_profit_porcent_2   = input(defval =25, title="TP2", inline = "3",  group="comprar retroceso de fibonacci")
+mover_stop_2       = input(defval=1, title="Mover el stop a...",inline = "3", group="comprar retroceso de fibonacci")
+
+
+take_profit             = input(defval=40.0,    title="Take profit fib",         type=input.float,  group="comprar retroceso de fibonacci")
+stop_loss               = input(defval=15.0,    title="stop loss fib",           type=input.float, group="comprar retroceso de fibonacci")
+show_fib = input(defval = true,  title = "Mostrar retroceso de fibonacci", group="comprar retroceso de fibonacci")
+per_mm_rapida 				= input(defval=5,       title="Media Rapida", 	            type=input.integer, minval=2, maxval=150, group="comprar retroceso de fibonacci")
+per_mm_moderada 			= input(defval=15,      title="Media moderada",             type=input.integer, minval=2, maxval=300, group="comprar retroceso de fibonacci")
+per_mm_lenta 				= input(defval=30,      title="Media Lenta", 	            type=input.integer, minval=5, maxval=500, group="comprar retroceso de fibonacci")
+
+
+hl=highest(close,per) 
+ll=lowest(close,per)   
+dist=hl-ll  
+
+
+f0 = close[per]>close ? hl : ll+dist
+f1 = close[per]>close ? hl-dist*0.236 : ll+dist*0.786
+f2 = close[per]>close ? hl-dist*0.382 : ll+dist*0.618
+f3 = close[per]>close ? hl-dist*0.5 : ll+dist*0.5
+f4 = close[per]>close ? hl-dist*0.618 : ll+dist*0.382
+f5 = close[per]>close ? hl-dist*0.786 : ll+dist*0.236 
+f6 = close[per]>close ? hl-dist : ll
+
+// Variables de la estrategia
+
+mm_v =ema(close,per_mm_rapida)
+mm_a =ema(close,per_mm_moderada)
+mm_r =ema(open,per_mm_lenta)
+mm_lenta =ema(close, per_mm_lenta*2)
+comprado_fib = false
+var TP = 0.00
+var SL = 0.00
+var PE = 0.00
+var profit = false
+var profit_2 = false
+var cont_entry = 1
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+var alcista =false
+alcista := mm_v < mm_a and mm_a >= mm_r
+var bajista =false
+bajista := mm_v < mm_a and mm_a < mm_r
+entrada_fib = barssince(close == hl) <= dias_retroc and (hl/ll-1)*100 >= porcent_max_min and close[1] >= mm_lenta and (mm_a >= mm_lenta or mm_r >= mm_lenta)
+estuve_comprado = barssince(comprado) >= 0 and barssince(comprado) <= dias_entre_compra
+var capital = 0.00
+var perdi = false
+var precio_limit = 0.0
+if not comprado and not vendido
+    if capital < strategy.equity
+        perdi := true
+        capital := strategy.equity
+    if capital > strategy.equity
+        perdi := false
+        capital := strategy.equity
+    //strategy.entry(id, long, qty, limit, stop, oca_name, oca_type, comment, when, alert_message)
+    if entrada_fib and comprar_fibo and close[per]<close
+        if orden_compra == "Fib 38"
+            precio_limit := f2
+        else if orden_compra == "Fib 50"
+            precio_limit :=  f3
+        else if orden_compra == "Fib 61"
+            precio_limit := f4
+        else if orden_compra == "Fib 78"
+            precio_limit :=  f5
+        else if orden_compra == "Fib 1"
+            precio_limit := f6
+        strategy.entry("Compra por fib " +orden_compra , strategy.long,  limit=precio_limit, comment="Compra por alcista", alert_message="Compra por alcista"+tostring(cont_entry)+"\nPrecio:"+tostring(close))
+        PE := precio_limit
+        TP := PE * (1+(take_profit/100))
+        SL := PE * (1-(stop_loss/100))
+        capital := strategy.equity
+        
+
+        
+    //strategy.entry("Compra por alcista", strategy.long,  limit=highest(high,per)*0.65, comment="Compra por alcista", alert_message="Compra por alcista"+tostring(cont_entry)+"\nPrecio:"+tostring(close))
+    strategy.cancel_all(not entrada_fib)
+    strategy.cancel_all(estuve_comprado)
+    
+//strategy.exit(id, from_entry, qty, qty_percent, profit, limit, loss, stop, trail_price, trail_points, trail_offset, oca_name, comment, when, alert_message) → void
+if comprado
+    profit := PE > 0 and PE * (1+(salvar_profit_porcent/100)) <= close  
+    if profit and salvar_profit_bool_porcent
+        SL := PE * (1 + mover_stop / 100) > SL ? PE * (1 + mover_stop / 100) : SL  
+        
+
+    profit_2 := PE > 0 and PE * (1+(salvar_profit_porcent_2/100)) <= close  
+    if profit_2 and salvar_profit_bool_porcent_2
+        SL := PE * (1 + mover_stop_2 / 100) > SL ? PE * (1 + mover_stop_2 / 100) : SL  
+
+    if close >=TP
+        strategy.close_all(when = close >=TP, comment = "close all entries TP", alert_message="Cierre por TP"+"\nPrecio:"+tostring(close))
+    if close <= SL
+        strategy.close_all(when = close <= SL, comment = "close all entries", alert_message="Cierre por SL"+"\nPrecio:"+tostring(close))
+       
+    strategy.exit("Salida", "Compra por fib " +orden_compra, profit=take_profit, loss= stop_loss, limit=TP, stop=SL, comment="Compra por alcista"+tostring(cont_entry-1), alert_message="Compra por alcista"+tostring(cont_entry-1)+"\nPrecio:"+tostring(close))
+    
+
+    //strategy.close_all(when=bajista, comment="Compra por alcista"+tostring(cont_entry-1), alert_message="Compra por alcista"+tostring(cont_entry-1)+"\nPrecio:"+tostring(close))
+
+plot(mm_v, color=color.green)
+plot(mm_a, color=color.yellow)
+plot(mm_r, color=color.red)
+plot(mm_lenta, color=color.lime)
+//plot(entrada_fib)
+//bgcolor(estuve_comprado ? color.red : na)
+bgcolor(comprado_fib ? color.white : na)
+bgcolor(entrada_fib ? color.aqua : na)
+//bgcolor(bajista ? color.red : na)
+profitLine = plot(comprado ? TP : na, title = "Take profit", color = color.green, style = plot.style_linebr)
+currentLine =plot(comprado ? PE : na, title = "Middle Line", color = color.white, style = plot.style_linebr)
+lossLine = plot(comprado ? SL : na, title = "Stop Loss", color = color.red, style = plot.style_linebr)
+fill(currentLine,profitLine, title = "Profit Background" ,color =color.new(color.green,75) )
+fill(currentLine,lossLine, title = "Loss Background" ,color = color.new(color.red,75))
+
+
+
+plot(show_fib ? f0 :na, style=plot.style_cross, color=color.silver)
+plot(show_fib ? f6 : na, style=plot.style_cross, color=color.silver)
+
+// 0 a 1
+plotshape(close[per]>close and show_fib?f0:na, location=location.absolute,size=size.tiny, color=color.black, transp=0, text="1", textcolor=color.silver, style=shape.labeldown, show_last=1)
+plotshape(close[per]<close and show_fib ? f0:na, location=location.absolute,size=size.tiny, color=color.black, transp=0, text="0", textcolor=color.silver, style=shape.labeldown, show_last=1)
+plotshape(close[per]>close and show_fib ? f6:na, location=location.absolute,size=size.tiny, color=color.black, transp=0, text="0", textcolor=color.silver, style=shape.labeldown, show_last=1)
+plotshape(close[per]<close and show_fib ? f6:na, location=location.absolute,size=size.tiny, color=color.black, transp=0, text="1", textcolor=color.silver, style=shape.labeldown, show_last=1)
+
+//0.5
+plot(show_fib ? f3 : na, style=plot.style_cross, color=color.green)
+plotshape(show_fib ? f3 : na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text="0.5", textcolor=color.green, style=shape.labeldown, show_last=1)
+
+// .236
+plot(close[per]<close and show_fib ? f1:na, style=plot.style_cross, color=color.red)
+plotshape(close[per]<close and show_fib ? f1:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".236", textcolor=color.red, style=shape.labeldown, show_last=1)
+plot(close[per]>close and show_fib ? f5:na, style=plot.style_cross, color=color.red)
+plotshape(close[per]>close and show_fib ? f5:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".236", textcolor=color.red, style=shape.labeldown, show_last=1)
+
+// .382
+plot(close[per]<close and show_fib ? f2:na, style=plot.style_cross, color=color.lime)
+plotshape(close[per]<close and show_fib ? f2:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".382", textcolor=color.lime, style=shape.labeldown, show_last=1)
+plot(close[per]>close and show_fib ? f4:na, style=plot.style_cross, color=color.lime)
+plotshape(close[per]>close and show_fib ? f4:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".382", textcolor=color.lime, style=shape.labeldown, show_last=1)
+
+// .618
+plot(close[per]<close and show_fib ? f4:na, style=plot.style_cross, color=color.yellow)
+plotshape(close[per]<close and show_fib ? f4:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".618", textcolor=color.yellow, style=shape.labeldown, show_last=1)
+plot(close[per]>close and show_fib ? f2:na, style=plot.style_cross, color=color.yellow)
+plotshape(close[per]>close and show_fib ? f2:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".618", textcolor=color.yellow, style=shape.labeldown, show_last=1)
+
+// .786
+plot(close[per]<close and show_fib ? f5:na,style=plot.style_cross, color=color.aqua)
+plotshape(close[per]<close and show_fib ? f5:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text="786", textcolor=color.aqua, style=shape.labeldown, show_last=1)
+plot(close[per]>close and show_fib ? f1:na,style=plot.style_cross, color=color.aqua)
+plotshape(close[per]>close and show_fib ? f1:na, location=location.absolute,size=size.tiny,  color=color.black, transp=0, text=".786", textcolor=color.aqua, style=shape.labeldown, show_last=1)

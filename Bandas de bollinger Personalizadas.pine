@@ -1,0 +1,203 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © yunioseijo
+
+//@version=4
+strategy("Bandas de bollinger Personalizadas", overlay=true, shorttitle = "BB Personalizadas")
+
+
+a_favor_tendencia       = input(defval=true,        title="Comprar el rebote a la media", type=input.bool, group="Rebote a la media")
+stop_loss_BReb             = input(defval="Central",   title="Comprar por Rebote, Stop loss (banda)",  options=["Central", "Opuesta"], group="Rebote a la media")
+take_profit_BReb               = input(defval=60.0,         title="Take profit",                   type=input.float, step=0.1, group="Rebote a la media")
+
+de_banda_inferior      = input(defval=true,        title="Compra en la banda inferior", type=input.bool, group="Banda Inferior")
+take_profit_BInferior             = input(defval="Central",   title="Comprar banda Inferiot, Take Profit (banda)",  options=["Central", "Opuesta"], group="Banda Inferior")
+stop_loss_BInferior               = input(defval=6.0,         title="Take profit",                   type=input.float, step=0.1, group="Banda Inferior")
+
+// ######################### //parametros de las Bandas ###########################
+longitud_bb				= input(defval=20,       	title="Longitud", 			    	type=input.integer,  group="Parametros BB")
+multiplicador_bb			= input(defval=2, 	        title="Multiplicador", 			    type=input.float, step=0.1,  group="Parametros BB")
+fuente_bb					= input(defval=close,    	title="Fuente", 		    	    type=input.source,  group="Parametros BB")
+
+// Parametros del macd
+macd_fl = input(title="Linea Rapida", type=input.integer, defval=12,  group="Parametros del MACD")
+macd_sl = input(title="Linea Lenta", type=input.integer, defval=26,  group="Parametros del MACD")
+macd_src = input(title="Fuente", type=input.source, defval=close,  group="Parametros del MACD")
+macd_rl = input(title="Señal", type=input.integer, minval = 1, maxval = 50, defval = 9,  group="Parametros del MACD")
+
+//parametros de la pendiente
+lookback1 = input(defval=1, title="Lookback 1",  group="Parametros de la pendiente")
+media_per_pend = input(defval=5, title="MA Length",  group="Parametros de la pendiente")
+fuente_pendiente = input(defval="EMA", title="1st MA Type", options=["SMA", "EMA", "HMA", "VWMA", "LSMA"],  group="Parametros de la pendiente")
+
+limite_variacion	    = input(defval=12, title="Limite de Variacion ne la vela de entrada")
+capital_x_operacion 	= input(defval=100, 	        title="Capital por Operacion %",    type=input.integer, minval=1, maxval=100)
+limite_comp_largos		= input(defval=15,      title="Porcentaje maximo sobre compra para largos",     type=input.integer)
+
+
+tolerancia_super		= input(defval=2.0,         title="Tolerancia Superior", 		type=input.float)
+tolerancia_infer		= input(defval=0.5,         title="Tolerancia Inferior", 		type=input.float)
+
+// Timeframe {
+backtest_timeframe_start    = input(defval = timestamp("01 Jan 1900 00:00 +0000"), title = "Periodo de inicio", type = input.time)
+USE_ENDTIME                 = input(defval = false, title="Solo en la fecha  (Falso, usa todo el tiempo disponible)")
+backtest_timeframe_end      = input(defval = timestamp("01 Jan 2031 00:00 +0000"), title = "Fin", type = input.time)
+within_timeframe = time >= backtest_timeframe_start and (time <= backtest_timeframe_end or not USE_ENDTIME)
+// }
+
+// ###################### macd ######################
+macd_isAlcista(_macd, _macd_signal) => _macd > _macd_signal ? true : false
+
+// Calculating MACD
+macd_fma = ema(macd_src, macd_fl)
+macd_sma = ema(macd_src, macd_sl)
+macd = macd_fma - macd_sma
+
+macd_signal =  ema(macd, macd_rl)
+macd_hist = macd - macd_signal
+
+alcista_macd = macd_isAlcista(macd, macd_signal)
+// #################### fin macd ###################333
+
+// #################### Inicio Calculo de la pendiente #################
+f_hma(_src, _length)=>
+    _return = wma((2*wma(_src, _length/2))-wma(_src, _length), round(sqrt(_length)))
+price = close
+price1 = if (fuente_pendiente == "SMA")
+    sma(price, media_per_pend)
+else
+    if (fuente_pendiente == "EMA")
+        ema(price, media_per_pend)
+    else
+        if (fuente_pendiente == "VWMA")
+            vwma(price, media_per_pend)
+        else
+            if (fuente_pendiente == "LSMA")
+                linreg(price, media_per_pend, 0)
+            else
+                f_hma(price, media_per_pend)
+    
+
+roc1 = roc(price1, lookback1) * 63.92
+
+pendiente_alcista = roc1 >= 0
+
+
+// #################### FIN Calculo de la pendiente #################
+
+//################# Porcentaje a la media ###################
+variacion_porciento = abs(high-low) * 100 /open
+gran_vela_alc = variacion_porciento > limite_variacion and open < close
+gran_vela_baj = variacion_porciento > limite_variacion and open > close
+// porcentaje = close * 100 / mm_r - 100
+// sobrecomprado := porcentaje > limite_comp_largos
+// ema_porcentaje = ema(porcentaje,30)
+//################# Fin Porcentaje a la media ###################
+
+//funciones
+entre(valor, inferior, superior) =>
+    valor >= inferior and valor <= superior 
+
+//variables de estrategias
+var cont_entry = 1
+var TP_rebote = 0.0
+var SL_rebote = 0.0
+
+var TP_infer = 0.0
+var SL_infer = 0.0
+//#######################   Banda de Bollinger  ########################
+
+[mm_bb, banda_superior, banda_inferior] = bb(fuente_bb, longitud_bb, multiplicador_bb)
+var inferior =false
+var rebote = false
+
+if close < banda_inferior
+    inferior := true
+    rebote   := false
+if inferior and close > mm_bb
+    rebote := true
+    inferior := false
+else 
+    rebote := false
+
+bgcolor(inferior ? color.red : na)
+bgcolor(rebote ? color.lime : na)
+
+plot(mm_bb, title="media de Bollinger", color=color.red)
+fill( plot(banda_superior, "Banda Superior") , plot(banda_inferior, "Banda Inferior"), color=color.aqua)
+
+//#######################   End Banda de Bollinger  ########################
+
+largo_rebote = rebote and alcista_macd and pendiente_alcista
+largo_inferior  = close <= banda_inferior
+
+var comprado_rebote =false
+var comprado_inferior = false
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+//logica de la estrategia
+if (not comprado and not vendido)
+    
+    if largo_rebote and a_favor_tendencia
+        cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+        strategy.entry("Compra"+tostring(cont_entry), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_entry))
+        TP_rebote := close * (1+(take_profit_BReb/100))
+        if stop_loss_BReb == "Central"
+            SL_rebote := mm_bb
+        if stop_loss_BReb == "Opuesta"
+            SL_rebote := banda_superior
+        comprado_rebote := true
+    if largo_inferior and de_banda_inferior
+        cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+        strategy.entry("Compra"+tostring(cont_entry), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_entry))
+        if take_profit_BInferior == "Central"
+            TP_infer := mm_bb
+        if take_profit_BInferior == "Opuesta"
+            TP_infer := banda_superior
+        SL_infer := close * (1-(stop_loss_BInferior/100))
+        comprado_inferior := true
+
+
+if comprado
+    //verificar Tp y SL
+    if comprado_rebote
+        if close <= SL_rebote
+            strategy.close("Compra"+tostring(cont_entry), comment="SL"+tostring(cont_entry))
+            cont_entry := cont_entry + 1
+            TP_rebote := 0
+            comprado_rebote := false
+        if close >=TP_rebote
+            strategy.close("Compra"+tostring(cont_entry), comment="TP"+tostring(cont_entry))
+            cont_entry := cont_entry + 1
+            comprado_rebote := false
+
+    if comprado_inferior
+        
+        if close <= SL_infer
+            strategy.close("Compra"+tostring(cont_entry), comment="SL"+tostring(cont_entry))
+            cont_entry := cont_entry + 1
+            TP_infer := 0
+            comprado_rebote := false
+        if close >=TP_infer
+            strategy.close("Compra"+tostring(cont_entry), comment="TP"+tostring(cont_entry))
+            cont_entry := cont_entry + 1
+            comprado_rebote := false
+
+
+
+distancia = banda_superior - banda_inferior
+pintar_superior = distancia > tolerancia_super
+pintar_inferior = distancia < tolerancia_infer
+
+alcista = high > banda_superior and entre(distancia, tolerancia_infer, tolerancia_super)
+bajista = close < banda_inferior and entre(distancia, tolerancia_infer, tolerancia_super)
+
+
+//bgcolor(alcista ? color.green : na , transp=0)
+//bgcolor(bajista ? color.red : na , transp=0)
+//fill(ts,d ,color =( pintar_superior ? color.red : na))
+//fill(ti,d ,color =( pintar_inferior ? color.red : na))
+//plot(TP > 0 ? TP : na, color=color.green, style=plot.style_circles)
+//plot(TP, color=color.green, style=plot.style_circles)
+plot(mm_bb, color=color.red)
+
+fill( plot(banda_superior) , plot(banda_inferior), color=color.aqua)

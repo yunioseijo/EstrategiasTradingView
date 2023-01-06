@@ -1,0 +1,72 @@
+ // This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © yunioseijo
+
+//@version=4
+strategy("macd", overlay=false)
+
+mm_rapida 		= input(defval=12,   title="Media Rapida", 	            type=input.integer)
+mm_lenta 		= input(defval=26,  title="Media Lenta", 	            type=input.integer)
+diferenica 		= input(defval=9,  title="Diferencia de la media", 	type=input.integer)
+capital_x_operacion 	= input(defval=100, title="Capital por Operacion %", 	type=input.integer, minval=1, maxval=100)
+sobre_compra = input(100, title="Sobre compra")
+sobre_venta =  input(-100, title="Sobre venta")
+
+//TP y SL
+take_profit             = input(defval=30.0,         title="Take profit",                   type=input.float, step=0.1)
+stop_loss               = input(defval=15.0,         title="stop loss",                   type=input.float, step=0.1)
+
+//fecha desde no se validan las fechas
+desde_a					=input(2000, 	title="Desde Año")
+desde_m					=input(1, 		title="Desde Mes", minval=1, maxval=12)
+desde_d					=input(1, 		title="Desde Dia", minval=1, maxval=31)
+
+
+//fecha hasta no se validan las fechas
+hasta_a					=input(2030, 	title="Hasta Año")
+hasta_m					=input(1, 		title="Hasta Mes", minval=1, maxval=12)
+hasta_d					=input(1, 		title="Hasta Dia", minval=1, maxval=31)
+
+[dif, emadif, h] = macd(close, mm_rapida, mm_lenta, diferenica)
+sl = 0.00
+tp = 0.00
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+
+// #########################  procesamiento ###########################
+
+fechaValida() =>
+	desde = time >= timestamp(syminfo.timezone, desde_a, desde_m, desde_d, 0, 0)
+	hasta = time <= timestamp(syminfo.timezone, hasta_a, hasta_m, hasta_d, 0, 0)
+	desde and hasta
+
+//logica de la estrategia
+if (true)
+    if crossover(dif, emadif) and dif < sobre_venta
+        if vendido
+            strategy.close("Venta") 
+        //cantidad a comprar round(strategy.equity / close) si son acciones donde hay que comprar un entero
+        cantidad = strategy.equity / close * capital_x_operacion / 100
+        sl := close * (1-stop_loss)
+        tp := close * (1+take_profit)
+        strategy.entry("Compra", strategy.long, qty=cantidad, comment="Compra SL:" + tostring(sl, "0.00") + "TP: "+ tostring(tp, "0.00"))
+        //Cierra en esperar el close, parametros id para el exit el id de la operacion a cerrar y los tp y sl
+        strategy.exit("Salida", "Compra", stop=sl, limit=tp)
+
+    if crossunder(dif, emadif) and dif > sobre_compra
+        if comprado
+            strategy.close("Compra") 
+        //cantidad a comprar round(strategy.equity / close) si son acciones donde hay que comprar un entero
+        cantidad = strategy.equity / close * capital_x_operacion / 100
+        sl := close * (1 - take_profit)
+        tp := close * (1 + stop_loss)
+        strategy.entry("Venta", strategy.short, qty=cantidad, comment="Venta SL:" + tostring(sl, "0.00") + "TP: "+ tostring(tp, "0.00"))
+        //Cierra en esperar el close, parametros id para el exit el id de la operacion a cerrar y los tp y sl
+        strategy.exit("Salida", "Venta", stop=sl, limit=tp)
+
+
+plot(dif, color=color.red)
+plot(emadif, color=color.blue)
+plot(h, style=plot.style_columns, color = h > h[1] ? color.green : color.red, transp=80)
+
+hline(sobre_compra, color=color.red)
+hline( sobre_venta, color=color.red)

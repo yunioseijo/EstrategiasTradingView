@@ -1,0 +1,112 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © salarkamjoo
+//@version=4
+
+// ========================================================================================================
+// --------------------------------------------------------------------------------------------------------
+// ----------Description:                                                                      ------------
+// ----------This code indicates all Ichimoku signals!                                         ------------
+// ----------you can set alerts to be notified when an ichimoku cloud is broken.               ------------
+// ----------$K-trader                                                                         ------------
+// --------------------------------------------------------------------------------------------------------
+// ========================================================================================================
+
+study(title="Ichimoku signals", shorttitle="Breakout komu", overlay=true)
+//=========================================== inputs ===========================================
+//---------------------------------- inputs group s1 ----------------------------------
+s1_vis  = input(true,"",group = "Signal 1", inline = "s1" )
+i1_s1   = input("Conversion Line", "", input.string, options=["Conversion Line", "Base Line", "Lead 1", "Lead 2", "Close"],group = "Signal 1", inline = "s1" )
+f_s1    = input("crossover", "", input.string, options=["crossover", "crossunder", ">", "<"],group = "Signal 1", inline = "s1" )
+i2_s1   = input("Base Line", "", input.string, options=["Conversion Line", "Base Line", "Lead 1", "Lead 2", "Close"],group = "Signal 1", inline = "s1" )
+
+//---------------------------------- inputs group s2 ----------------------------------
+s2_vis  = input(true,"",group = "Signal 2", inline = "s2" )
+i1_s2   = input("Lead 1", "", input.string, options=["Conversion Line", "Base Line", "Lead 1", "Lead 2", "Close"] ,group = "Signal 2", inline = "s2" )
+f_s2    = input("crossover", "", input.string, options=["crossover", "crossunder", ">", "<"] ,group = "Signal 2", inline = "s2")
+i2_s2   = input("Lead 2", "",input.string, options=["Conversion Line", "Base Line", "Lead 1", "Lead 2", "Close"] ,group = "Signal 2", inline = "s2")
+
+//---------------------------------- inputs group s3 ----------------------------------
+s3_vis  = input(true,"",group = "Signal3", inline = "s3" )
+f_s3    = input("break ▲", "", input.string, options=["break ▲"] ,group = "Signal3", inline = "s3")
+s4_vis  = input(true,"",group = "Signal4", inline = "s4" )
+f_s4    = input("break ▼", "", input.string, options=["break ▼"] ,group = "Signal4", inline = "s4")
+
+conversionPeriods = input(9, minval=1, title="Conversion Line Length")
+basePeriods = input(26, minval=1, title="Base Line Length")
+laggingSpan2Periods = input(52, minval=1, title="Lagging Span 2 Length")
+displacement = input(26, minval=1, title="Displacement")
+donchian(len) => avg(lowest(len), highest(len))
+conversionLine = donchian(conversionPeriods)
+baseLine = donchian(basePeriods)
+leadLine1 = avg(conversionLine, baseLine)
+leadLine2 = donchian(laggingSpan2Periods)
+plot(conversionLine, color=#0496ff, title="Conversion Line (Tenkan Sen)",display=display.all)
+plot(baseLine, color=#991515, title="Base Line (Kijun Sen)",display=display.all)
+plot(close, offset = -displacement + 1, color=#459915, title="Lagging Span (Chikou Span)",display=display.none)
+p1 = plot(leadLine1, offset = displacement - 1, color=color.green,
+	 title="Lead 1")
+p2 = plot(leadLine2, offset = displacement - 1, color=color.red,
+	 title="Lead 2")
+fill(p1, p2, title = "Cloud",color = leadLine1 > leadLine2 ? color.green : color.red)
+lead1 = leadLine1[displacement - 1]
+lead2 = leadLine2[displacement - 1]
+
+// ********************************************** Ichimoku "cross", ">", "<" signals **********************************************
+value(v) =>
+    if v == "Conversion Line"
+        conversionLine
+    else if v == "Base Line"
+        baseLine
+    else if v == "Lead 1"
+        lead1
+    else if v == "Lead 2"
+        lead2
+    else if v == "Close"
+        close
+x1 = value(i1_s1)
+y1 = value(i2_s1)
+x2 = value(i1_s2)
+y2 = value(i2_s2)
+
+//-----------------Cross over conversion and base lines -----------------------
+signal(x,y,f_s) =>
+    result = false
+    if f_s == "crossover"
+        result := crossover(x, y)
+    else if f_s == "crossunder"
+        result := crossunder(x, y)
+    else if f_s == ">"
+        result := x > y
+    else if f_s == "<"
+        result := x < y
+    else
+        result := false
+    
+s1= signal(x1,y1,f_s1)
+s2 = signal(x2,y2,f_s2)
+_styl1 = f_s1 == "crossover" or f_s1 == "crossunder" ? plot.style_circles : plot.style_linebr
+_styl2 = f_s2 == "crossover" or f_s2 == "crossunder" ? plot.style_circles : plot.style_linebr
+plot(s1 and s1_vis?x1:na, "signal 1", style = _styl1, linewidth=5,color=color.lime)
+plot(s2 and s2_vis?x2:na, "signal 2",style = _styl2, linewidth=5,color=color.orange)
+
+// ********************************************** Ichimoku Breakout **********************************************
+// -----------------break up red cloud-----------------------
+bool breakup = na
+bool breakdn = na
+crossup = crossover(close, lead2)
+green_candle = close > open
+if lead2 > lead1 and green_candle
+    breakup := crossup
+plotshape(breakup and s3_vis?high:na, "Signal3 (Break Up)", shape.triangleup ,location.belowbar, color.green, size = size.small)
+bgcolor(breakup and s3_vis?color.lime:na, title="Break Up Background")
+
+// -----------------break under green cloud-----------------------
+crossdn = crossunder(close, lead2)
+red_candle = close < open
+if lead2 < lead1 and red_candle
+    breakdn := crossdn
+plotshape(breakdn and s4_vis?low:na, "Signal4 (Break Down)", shape.triangledown ,location.abovebar, color.red, size = size.small)
+bgcolor(breakdn and s4_vis?color.red:na, title="Break Down Background")
+
+// alerts --------------------------------------------------------
+alertcondition((s1 and s1_vis) or (s2 and s2_vis) or (breakup and s3_vis) or (breakdn and s4_vis), "signals", "message")

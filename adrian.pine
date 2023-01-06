@@ -1,0 +1,494 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © adrianmprusia
+
+//@version=4
+strategy(title="BB plus", shorttitle="BB plus", overlay=true, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.1, initial_capital=1000)
+
+// Timeframe {
+backtest_timeframe_start    = input(defval = timestamp("01 Jan 2008 00:00 +0000"), title = "Backtest Start Time", type = input.time)
+USE_ENDTIME                 = input(false,title="Define backtest end-time (If false, will test up to most recent candle)")
+backtest_timeframe_end      = input(defval = timestamp("01 Jan 2021 00:00 +0000"), title = "Backtest End Time (if checked above)", type = input.time)
+within_timeframe            = time >= backtest_timeframe_start and (time <= backtest_timeframe_end or not USE_ENDTIME)
+// }
+
+// ######################### variables y entradas de datos ########################### //
+//Tendencia{
+//ia                  = input(defval=false, title="Parametros de la IA", type=input.bool)
+long_check                  = input(defval=true, title="Long", type=input.bool)
+short_check                 = input(defval=false, title="Short", type=input.bool)
+//}
+
+//Estrategias{
+strategy_group		        ="Estrategias"
+only_ma_check_IN            = input(defval=false, title="Only MA", type=input.bool, group=strategy_group, inline="a1")
+only_ma_check_OUT           = input(defval=false, title="", type=input.bool, group=strategy_group, inline="a1")
+ma_macd_check_IN            = input(defval=false, title="MA and MACD", type=input.bool, group=strategy_group, inline="a2")
+ma_macd_check_OUT           = input(defval=false, title="", type=input.bool, group=strategy_group, inline="a2")
+bb_macd_check_IN            = input(defval=true, title="BB and MACD", type=input.bool, group=strategy_group, inline="a3")
+bb_macd_check_OUT           = input(defval=true, title="", type=input.bool, group=strategy_group, inline="a3")
+bb_rss_check_IN             = input(defval=false, title="BB and RSS WMA", type=input.bool, group=strategy_group, inline="a4")
+bb_rss_check_OUT            = input(defval=false, title="", type=input.bool, group=strategy_group, inline="a4")
+macd_or_rss_check           = input(defval=false, title="SC", type=input.bool, group=strategy_group, tooltip="Usar solo MACD o RSS como condición de salida")
+drowdown_check              = input(defval=false, title="Reducir drowdown", type=input.bool, group=strategy_group)
+lateral_check               = input(defval=false, title="", type=input.bool, inline = "2", group=strategy_group)
+lateral		                = input(defval=2.0, title="Lateralidad", type=input.float, minval=0, maxval=100, step=1, inline = "2", group=strategy_group, tooltip="Distancia de la media movil a la banda superior e inferior (se expresa en %) [Se usa para la lateralidad]")/100
+limite_variacion_check      = input(defval=false, title="", type=input.bool, inline = "3", group=strategy_group)
+limite_variacion	        = input(defval=5.0, title="Limite de Variacion en la vela", type=input.float, minval=0, maxval=100, step=1, inline="3", group=strategy_group)/100
+candle_check                = input(defval=false, title="Signo de la vela", type=input.bool, group=strategy_group) 
+
+
+//parametros de la pendiente
+pendiente_group		        ="Parametros de la pendiente"
+pendiente_check             = input(defval=true, title="Pendiente", type=input.bool, group=pendiente_group, inline="p1")
+stop_pendiente_check        = input(defval=false, title="", type=input.bool, group=pendiente_group, inline="p1")
+lookback1 			        = input(defval=1, title="Lookback 1",  group=pendiente_group)
+media_per_pend 		        = input(defval=20, title="MA Length",  group=pendiente_group)
+med_opt 			        = input(defval="SMA", title="MA Type", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA", "LSMA"],  group=pendiente_group)
+med_src                     = input(title="Source", type=input.source, defval=close, group=pendiente_group)
+
+TP_check                    = input(defval=false, title="", type=input.bool, inline = "a", group ="TP and SL")
+take_profit                 = input(defval=60.0, title="TP", type=input.float, minval=0, inline = "a", group="TP and SL")/100
+SL_check                    = input(defval=false, title="", type=input.bool, inline = "b", group ="TP and SL")
+stop_lost                   = input(defval=15.0, title="SL", type=input.float, minval=0, maxval=100, inline = "b", group="TP and SL")/100
+stop_din                    = input(defval=false, title="Stop dinámico", type=input.bool, group ="TP and SL")
+//}
+
+//BB{
+bb_group			        ="BB"
+bb_length                   = input(20, minval=1, group = bb_group)
+bb_src                      = input(close, title="Source", group= bb_group)
+bb_mult                     = input(2, minval=0.001, maxval=50, title="StdDev", group= bb_group)
+bb_offset                   = input(0, "Offset", type = input.integer, minval = -500, maxval = 500, group= bb_group)
+//}
+
+//MA{
+ma_group			        ="Media Movil"
+ma_fl                       = input(title="Fast Length", type=input.integer, defval=2, inline = "01", group=ma_group)
+ma_fl_check                 = input(title="", type=input.bool, defval=true, inline = "01", group=ma_group, tooltip="Uso el precio de cierre o la MA rapida")
+ma_macd_opt_fl              = input(defval="SMA",   title="", inline = "01", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA", "LSMA"], group=ma_group, tooltip="En caso de MA and MACD")
+ma_sl                       = input(title="Slow Length", type=input.integer, defval=20, inline = "02", group=ma_group)
+ma_macd_opt_sl              = input(defval="SMA",   title="", inline = "02", options=["SMA", "EMA", "RMA", "WMA", "VWMA", "HMA", "LSMA"], group=ma_group, tooltip="En caso de MA and MACD")
+ma_src                      = input(title="Source", type=input.source, defval=close, inline = "04", group=ma_group)
+//}
+
+//MACD{
+macd_fl                     = input(title="Fast Length", type=input.integer, defval=12, group ="MACD")
+macd_sl                     = input(title="Slow Length", type=input.integer, defval=26, group ="MACD")
+macd_src                    = input(title="Source", type=input.source, defval=close, group ="MACD")
+macd_rl                     = input(title="Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 9, group ="MACD")
+sma_source                  = input(title="Simple MA (Oscillator)", type=input.bool, defval=false, group ="MACD")
+sma_signal                  = input(title="Simple MA (Signal Line)", type=input.bool, defval=false, group ="MACD")
+//}
+
+//RSS WMA{
+group_rss="RSS WMA"
+rss_price                   = input(title = "Source",                 type = input.source,  defval = close, group=group_rss)
+rss_alpha                   = input(title = "Combined Smoothness",    type = input.integer, defval = 15, minval = 1, group=group_rss)
+//}
+
+//Graficar{
+group_view="View"
+bb_grafic_check             = input(defval=true, title="Bandas de Bollinger", type=input.bool, group=group_view, inline="b1")
+bb_grafic_color_check       = input(defval=false, title="", type=input.bool, group=group_view, inline="b1", tooltip="Colorear")
+ma_grafic_check             = input(defval=false, title="Medias Moviles", type=input.bool, group=group_view, inline="b2")
+ma_grafic_color_check       = input(defval=false, title="", type=input.bool, group=group_view, inline="b2", tooltip="Colorear")
+rss_grafic_check            = input(defval=false, title="RSS WMA", type=input.bool, group=group_view)
+//}
+
+//////////////////////=======VARIABLES=======//////////////////////
+
+// Variables de la estrategia
+var comentario = ""
+var stop = 0.0
+var PE = 0.0
+var TP_Long = 0.0
+var TP_Short = 0.0
+var SL_Long = 0.0
+var SL_Short = 0.0
+var max_high = 0.0
+var min_low = 0.0
+//var cont_buy = 1
+//var cont_sell = 1
+//var long_bands = false
+//long_bands := nz(long_bands[1],false)
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+var macd_alcista = false
+//Calculo de la media movil de BB y las bandas superior e inferior
+[basis, bb_superior, bb_inferior] = bb(bb_src, bb_length, bb_mult)
+
+///////////////////////////////////////////////////////////////////
+
+//////////////////////=======FUNCIONES=======//////////////////////
+
+//f_LazyLine{
+f_LazyLine(_data, _length) =>
+    w1 = 0, w2 = 0, w3 = 0
+    L1 = 0.0, L2 = 0.0, L3 = 0.0
+    w = _length / 3
+    
+    if _length > 2 
+        w2 := round(w)
+        w1 := round((_length-w2)/2)
+        w3 :=   int((_length-w2)/2)
+        
+        L1 := wma(_data, w1)
+        L2 := wma(L1, w2)
+        L3 := wma(L2, w3)
+    else
+        L3 := _data
+    L3
+//}
+
+//angulo_pendiente{
+pendiente(_serie) =>
+    _serie / _serie[1] - 1
+
+angulo(_serie) =>
+    atan(pendiente(_serie)) * 180 / acos(-1) * 10
+    
+// #################### Inicio Calculo de la pendiente #################
+media_pen = if (med_opt == "SMA")
+    sma(med_src, media_per_pend)
+else if (med_opt == "EMA")
+	ema(med_src, media_per_pend)
+else if (med_opt == "VWMA")
+	vwma(med_src, media_per_pend)
+else if (med_opt == "LSMA")
+	linreg(med_src, media_per_pend, 0)
+else if (med_opt == "RMA")
+    rma(med_src, media_per_pend)
+else if (med_opt   == "WMA")
+    wma(med_src, media_per_pend)
+else
+	hma(med_src, media_per_pend)
+
+roc1 = roc(media_pen, lookback1) * 63.92
+pendiente_alcista = roc1 > 0
+//pendiente_alcista = angulo(media_pen) > 0
+//}
+
+///////////////////////////////////////////////////////////////////
+
+// Calculate MA
+ma_fast = if (ma_macd_opt_fl   == "SMA")
+    sma(ma_src, ma_fl)
+else if (ma_macd_opt_fl   == "EMA")
+    ema(ma_src, ma_fl)
+else if (ma_macd_opt_fl   == "RMA")
+    rma(ma_src, ma_fl)
+else if (ma_macd_opt_fl   == "WMA")
+    wma(ma_src, ma_fl)
+else if (ma_macd_opt_fl   == "VWMA")
+    vwma(ma_src, ma_fl)
+else if (ma_macd_opt_fl == "LSMA")
+	linreg(ma_src, ma_fl, 0)
+else
+	hma(ma_src, ma_fl)
+
+float ma_slow = if (ma_macd_opt_sl   == "SMA")
+    sma(ma_src, ma_sl)
+else if (ma_macd_opt_sl   == "EMA")
+    ema(ma_src, ma_sl)
+else if (ma_macd_opt_sl   == "RMA")
+    rma(ma_src, ma_sl)
+else if (ma_macd_opt_sl   == "WMA")
+    wma(ma_src, ma_sl)
+else if (ma_macd_opt_sl   == "VWMA")
+    vwma(ma_src, ma_sl)
+else if (ma_macd_opt_sl == "LSMA")
+	linreg(ma_src, ma_sl, 0)
+else
+	hma(ma_src, ma_sl)
+
+ma_roc = roc(ma_fast, lookback1) * 63.92
+pendiente_alcista_ma = ma_roc > 0
+//pendiente_alcista_ma = angulo(ma_fast) > 0
+ma_long_Condition = ma_fast > ma_slow //crossover(ma_fast, ma_slow)
+ma_short_Condition = ma_fast < ma_slow //crossunder(ma_fast, ma_slow)
+
+// Calculating MACD
+macd_fma = sma_source ? sma(macd_src, macd_fl) : ema(macd_src, macd_fl)
+macd_sma = sma_source ? sma(macd_src, macd_sl) : ema(macd_src, macd_sl)
+macd = macd_fma - macd_sma
+
+macd_signal = sma_signal ? sma(macd, macd_rl) : ema(macd, macd_rl)
+macd_hist = macd - macd_signal
+
+//RSS WMA
+LL = f_LazyLine(rss_price, rss_alpha)
+c_up        = color.new(#33ff00, 0)
+c_dn        = color.new(#ff1111, 0)
+uptrend     = LL > LL[1]
+
+//MACD
+macd_alcista := macd > macd_signal ? true : false
+
+//BB
+var inferior = false
+var rebote_up = false
+var rebote_down = false
+var superior = false
+if low < bb_inferior
+    inferior := true
+    rebote_up   := false
+    rebote_down := false
+    superior := false
+if inferior and close > basis
+    rebote_up := true
+    inferior := false
+    rebote_down := false
+    superior := false
+if rebote_up and close < basis
+    rebote_down := true
+    rebote_up := false
+    superior := false
+    inferior := false
+if high > bb_superior
+    superior := true
+    rebote_up := false
+    rebote_down := false
+    inferior := false
+if superior and close < basis
+    rebote_down := true
+    superior := false
+    rebote_up := false
+    inferior := false
+if rebote_down and close > basis
+    rebote_up := true
+    rebote_down := false
+    superior := false
+    inferior := false
+
+//EMA
+ema_D50 = ema(close, 50)
+ema_D200 = ema(close, 200)
+if timeframe.isminutes and timeframe.multiplier < 60
+    ema_D50 := ema(close, 240/timeframe.multiplier*50)
+    ema_D200 := ema(close, 240/timeframe.multiplier*200)
+
+if timeframe.isminutes and timeframe.multiplier >= 60
+    ema_D50 := ema(close, 1440/timeframe.multiplier*50)
+    ema_D200 := ema(close, 1440/timeframe.multiplier*200)
+
+//if ia
+//    if ema_D50 > close and ema_D200 > close
+//        long_or_short := "Short"
+//    else if (ema_D50 > close and ema_D200 < close) or (ema_D50 < close and ema_D200 > close)
+//        long_or_short := "Long and Short"
+//    else
+//        long_or_short := "Long"
+
+variacion_porciento = roc(close,1)
+gran_vela_alc = variacion_porciento > limite_variacion and open < close
+gran_vela_baj = variacion_porciento > limite_variacion and open > close
+
+//logica de la estrategia
+var long_cond = false
+var short_cond = false
+var stop_long_cond = false
+var stop_short_cond = false
+//lateral
+//limite_variacion
+//drowdown_check
+//lateral_check
+
+
+//**********condicion para posicion en long**********//
+//(lateral <= (1-bb_inferior/bb_superior))
+pen_aux_L       = (pendiente_check          ? pendiente_alcista     : true)
+pen_ma_aux_L    = (pendiente_check          ? pendiente_alcista_ma  : true)
+lim_aux_L       = (limite_variacion_check   ? not gran_vela_alc     : true)
+candle_aux_L    = (candle_check             ? close > open          : true)
+
+only_ma_L       = only_ma_check_IN ? (ma_fl_check ? ma_long_Condition : close > ma_slow)                   : false
+ma_macd_L       = ma_macd_check_IN ? (ma_fl_check ? ma_long_Condition : close > ma_slow) and macd_alcista  : false
+bb_macd_L       = bb_macd_check_IN ? macd_alcista and (rebote_up or superior)                              : false
+bb_rss_L        = bb_rss_check_IN  ? uptrend and (rebote_up or superior)                                   : false
+
+long_cond := lim_aux_L and ((pen_ma_aux_L and (only_ma_L or ma_macd_L)) or (pen_aux_L and (bb_macd_L or bb_rss_L))) and candle_aux_L
+//***************************************************//
+
+if long_check
+    if within_timeframe and not comprado
+        if long_cond
+			strategy.entry("Compra", strategy.long, comment="Compra_Precio:"+tostring(close), alert_message="Compra_Precio:"+tostring(close))
+            PE := close
+            if TP_check
+                TP_Long := close * (1+take_profit)
+            if SL_check
+                SL_Long := close * (1-stop_lost)
+                max_high := close
+
+//**********condicion para posicion en short*********//
+//(lateral <= (1-bb_inferior/bb_superior))
+pen_aux_S       = (pendiente_check          ? not pendiente_alcista     : true)
+pen_ma_aux_S    = (pendiente_check          ? not pendiente_alcista_ma  : true)
+lim_aux_S       = (limite_variacion_check   ? not gran_vela_baj         : true)
+candle_aux_S    = (candle_check             ? close < open              : true)
+
+only_ma_S       = only_ma_check_IN ? (ma_fl_check ? ma_short_Condition : close < ma_slow)                        : false
+ma_macd_S       = ma_macd_check_IN ? (ma_fl_check ? ma_short_Condition : close < ma_slow) and not macd_alcista   : false
+bb_macd_S       = bb_macd_check_IN ? not macd_alcista and (rebote_down or inferior)                              : false
+bb_rss_S        = bb_rss_check_IN  ? not uptrend and (rebote_down or inferior)                                   : false
+
+short_cond := lim_aux_S and ((pen_ma_aux_S and (only_ma_S or ma_macd_S)) or (pen_aux_S and (bb_macd_S or bb_rss_S))) and candle_aux_S
+//***************************************************//
+
+if short_check
+    if within_timeframe and not vendido// and (lateral <= (1-bb_inferior/bb_superior))
+        if short_cond
+            strategy.entry("Venta", strategy.short, comment="Venta_Precio:"+tostring(close), alert_message="Venta_Precio:"+tostring(close))
+            PE := close 
+            if TP_check
+    	        TP_Short := close * (1-take_profit)
+    	    if SL_check
+                SL_Short := close * (1+stop_lost)
+                min_low := close
+
+//**********condicion de parada para posicion en long**********//
+
+//(lateral <= (1-bb_inferior/bb_superior))
+stop_pen_aux_L      = (stop_pendiente_check    ? not pendiente_alcista     : true)
+stop_pen_ma_aux_L   = (stop_pendiente_check    ? not pendiente_alcista_ma  : true)
+stop_candle_aux_L   = (candle_check            ? close < open              : true)
+
+stop_only_ma_L      = only_ma_check_OUT ? (ma_fl_check ? ma_short_Condition : close < ma_slow)                         : false
+stop_ma_macd_L      = ma_macd_check_OUT ? (ma_fl_check ? ma_short_Condition : close < ma_slow) and not macd_alcista    : false
+stop_bb_macd_L      = bb_macd_check_OUT ? (not macd_alcista and rebote_down) or inferior                               : false
+stop_bb_rss_L       = bb_rss_check_OUT  ? (not uptrend and rebote_down) or inferior                                    : false
+
+stop_long_cond := ((stop_pen_ma_aux_L and (stop_only_ma_L or stop_ma_macd_L)) or (stop_pen_aux_L and (stop_bb_macd_L or stop_bb_rss_L))) and stop_candle_aux_L
+//*************************************************************//
+
+//verificar PE y SC_L
+if comprado
+    if TP_check and SL_check
+        strategy.exit("Compra", limit=TP_Long, stop=SL_Long, comment="TP_SL", alert_message="TP_SL")
+        if stop_din and max_high < high
+            SL_Long := high * (1-stop_lost)
+            max_high := high
+    else
+        if TP_check
+            strategy.exit("Compra", limit=TP_Long, comment="TP_Long_Precio:"+tostring(TP_Long), alert_message="TP_Long_Precio:"+tostring(TP_Long))
+        if SL_check
+            strategy.exit("Compra", stop=SL_Long, comment="SL_Long_Precio:"+tostring(SL_Long), alert_message="SL_Long_Precio:"+tostring(SL_Long))
+            if stop_din and max_high < high
+                SL_Long := high * (1-stop_lost)
+                max_high := high
+    
+    if drowdown_check
+        if only_ma_check_OUT or ma_macd_check_OUT
+            if ma_slow > PE*1.005
+                strategy.exit("Compra", stop=ma_slow, comment="TP_Long_Precio:"+tostring(ma_slow), alert_message="Drown_TP_Long_Precio:"+tostring(ma_slow))
+        if bb_macd_check_OUT or bb_rss_check_OUT
+            if basis > PE*1.005 and not macd_alcista
+                strategy.exit("Compra", stop=basis, comment="Drown_TP_Long_Precio:"+tostring(basis), alert_message="Drown_TP_Long_Precio:"+tostring(basis))
+    
+    if macd_or_rss_check
+        if bb_macd_check_OUT or ma_macd_check_OUT
+            if not macd_alcista
+                if close > PE
+                    strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+                else
+                    strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+        if bb_rss_check_OUT
+            if not uptrend
+                if close > PE
+                    strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+                else
+                    strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+    
+    if stop_long_cond
+        if close > PE
+            strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+        else
+            strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+
+//**********condicion de parada para posicion en short*********//
+
+//(lateral <= (1-bb_inferior/bb_superior))
+stop_pen_aux_S      = (stop_pendiente_check    ? pendiente_alcista     : true)
+stop_pen_ma_aux_S   = (stop_pendiente_check    ? pendiente_alcista_ma  : true)
+stop_candle_aux_S   = (candle_check            ? close > open              : true)
+
+stop_only_ma_S      = only_ma_check_OUT ? (ma_fl_check ? ma_short_Condition : close > ma_slow)                   : false
+stop_ma_macd_S      = ma_macd_check_OUT ? (ma_fl_check ? ma_short_Condition : close > ma_slow) and macd_alcista  : false
+stop_bb_macd_S      = bb_macd_check_OUT ? (macd_alcista and rebote_up) or superior                               : false
+stop_bb_rss_S       = bb_rss_check_OUT  ? (uptrend and rebote_up) or superior                                    : false
+
+stop_short_cond := ((stop_pen_ma_aux_S and (stop_only_ma_S or stop_ma_macd_S)) or (stop_pen_aux_S and (stop_bb_macd_S or stop_bb_rss_S))) and stop_candle_aux_S
+//*************************************************************//
+
+//verificar PE y SC_L
+if vendido
+    if TP_check and SL_check
+        strategy.exit("Venta", limit=TP_Short, stop=SL_Short, comment="TP_SL", alert_message="TP_SL")
+        if stop_din and min_low > low
+            SL_Short := low * (1+stop_lost)
+            min_low := low
+    if TP_check
+        strategy.exit("Compra", limit=TP_Short, comment="TP_Long_Precio:"+tostring(TP_Short), alert_message="TP_Long_Precio:"+tostring(TP_Short))
+    if SL_check
+        strategy.exit("Compra", stop=SL_Short, comment="SL_Long_Precio:"+tostring(SL_Short), alert_message="SL_Long_Precio:"+tostring(SL_Short))
+        if stop_din and min_low > low
+            SL_Short := low * (1+stop_lost)
+            min_low := low
+        
+    if drowdown_check
+        if only_ma_check_OUT or ma_macd_check_OUT
+            if ma_slow < PE*1.005
+                strategy.exit("Compra", stop=ma_slow, comment="TP_Long_Precio:"+tostring(ma_slow), alert_message="Drown_TP_Long_Precio:"+tostring(ma_slow))
+        if bb_macd_check_OUT or bb_rss_check_OUT
+            if basis < PE*1.005 and not macd_alcista
+                strategy.exit("Compra", stop=basis, comment="Drown_TP_Long_Precio:"+tostring(basis), alert_message="Drown_TP_Long_Precio:"+tostring(basis))
+    
+    if macd_or_rss_check
+        if bb_macd_check_OUT or ma_macd_check_OUT
+            if macd_alcista
+                if close < PE
+                    strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+                else
+                    strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+        if bb_rss_check_OUT
+            if uptrend
+                if close < PE
+                    strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+                else
+                    strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+    
+    if stop_short_cond
+        if close < PE
+            strategy.close("Compra", comment="TP_Long_Precio:"+tostring(close), alert_message="TP_Long_Precio:"+tostring(close))
+        else
+            strategy.close("Compra", comment="SC_L_Precio:"+tostring(close), alert_message="SC_L_Precio:"+tostring(close))
+
+if( not within_timeframe)
+    strategy.close_all(comment="Venta por finalizacion de periodo")
+	
+//////////////////////////////////////////////////////////////////////////
+
+//Graficando las BB (Debo cambiar overlay=true arriba)
+bgcolor(inferior and bb_grafic_check and bb_grafic_color_check ? color.red : na)
+bgcolor(rebote_up and bb_grafic_check and bb_grafic_color_check ? color.green : na)
+bgcolor(superior and bb_grafic_check and bb_grafic_color_check ? color.blue : na)
+bgcolor(rebote_down and bb_grafic_check and bb_grafic_color_check ? color.orange : na)
+
+plot(bb_grafic_check ? basis : na, "Basis", color=#872323, offset = bb_offset)
+p1 = plot(bb_grafic_check ? bb_superior: na, "Upper", color=color.teal, offset = bb_offset)
+p2 = plot(bb_grafic_check ? bb_inferior : na, "Lower", color=color.teal, offset = bb_offset)
+fill(p1, p2, title = "Background", color=color.aqua)
+
+
+//Graficando EMA
+//plot(ma_grafic_check ? ema_D200 : na, title="EMA 200", color=color.purple, linewidth=2)
+//plot(ma_grafic_check ? ema_D50 : na, title="EMA 50", color=color.black, linewidth=2)
+
+//Graficando MA
+plot(ma_grafic_check ? ma_fast : na, title="MA Fast", color=color.blue, linewidth=2)
+plot(ma_grafic_check ? ma_slow : na, title="ma Slow", color=color.maroon, linewidth=2)
+bgcolor(ma_long_Condition and ma_grafic_check and ma_grafic_color_check ? color.green : na)
+bgcolor(ma_short_Condition and ma_grafic_check and ma_grafic_color_check ? color.red : na)
+
+//Graficando RSS WMA
+plot(rss_grafic_check ? LL : na, "SS_WMA Line", color = uptrend ? c_up : c_dn, linewidth=3)

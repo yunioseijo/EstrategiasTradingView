@@ -1,0 +1,1117 @@
+//@version=4
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+//# * ══════════════════════════════════════════════════════════════════════════════════════════════
+//# *
+//# * Study       : Pivot Points 
+//# *                 - Pivot Type Options
+//# *                    1-) Camarilla
+//# *                    2-) DeMark
+//# *                    3-) Fibonacci
+//# *                    4-) Floor - Classic 
+//# *                    5-) Swing - Custom interpretation
+//# *                    6-) Woodie
+//# *
+//# *                 - Additions
+//# *                    1-) Central Pivot Range
+//# *                    2-) Previous TimeFrame OHLC Levels
+//# *
+//# *                - Plotting Add-Ons - Plots the following custom and built-in indicators
+//# *                    1-) ADX Colored DMI Line - custom interpretation of directional movement index
+//# *                    2-) Volatility Colored Price/MA Line - custom interpretation of "price distance to its moving average" study 
+//# *                    3-) Volume Weighted Colored Bars  - custom volume study presentation
+//# *                    4-) Ichimoku Cloud Projection - build-in with only kumo cloud display option 
+//# *                    5-) Bollinger Bands : build-in with customized multi bands display
+//# *                    6-) Logistic EMA - Logistic Map Equation apllied EMA  
+//# *                    7-) Volume Weighted Average Price (VWAP) - build-in
+//# *                    8-) Linear Regression : build-in 
+//# *
+//# *                - Panel Add-Ons - Statistical panel presents evaluation of the following custom and built-in indicators  
+//# *                    1-) Directional Movment Index (DMI)
+//# *                    2-) Ichimoku Cloud 
+//# *                    3-) Price Distance to its MA - custom interpretation
+//# *                    4-) RSI Oscillator 
+//# *                    5-) Stochastic Oscillator 
+//# *                    6-) MACD Oscillator 
+//# *                    7-) Fear & Greed - custom interpretation 
+//# *
+//# *                - Market Sentiment Meter
+//# *                - Range Meter with Average True Range AddOn 
+//# *
+//# * Author      : © dgtrd
+//# *
+//# * Revision History
+//# *  Release    : Dec 04, 2020
+//# *  Update     : Dec 09, 2020  : Bollinger Bands addition
+//# *  Update     : Dec 12, 2020  : Code completely reworked by introducing arrays 
+//# *                                - Logistic EMA (LEMA) addition 
+//# *  Update     : Dec 13, 2020  : Panel additions
+//# *                                - RSI, STOCH and MACD
+//# *                                - Fear & Greed
+//# *  Update     : Dec 14, 2020  : Central Pivot Range (CPR) addition
+//# *  Update     : Dec 17, 2020  : Market Sentiment Meter addition
+//# *  Update     : Dec 28, 2020  : Previous TimeFrame OHLC plotting addition
+//# *  Update     : Dec 31, 2020  : Range Meter addition
+//# *  Update     : Jan 04, 2021  : Added ability to support
+//# *                                - Weekly and/or Monthly Pivot 
+//# *                                - Historical Pivots
+//# *                                - Range Meter extended with ATR Range 
+//# *  Update     : Jan 07, 2021  : Linear Regresion addition
+//# *  Update     : Mar 01, 2021  : Enchantments with Bollinger Bands, and Linear Regression
+//# *  Update     : Mar 24, 2021  : Linear Regression enable both Deviation Plottings, slightly re-organized script inputs and added tips for options
+//# *  Update     : Apr 20, 2021  : Added Alerts to Pivot Support & Resistance Levels, Linear Regression, Previous HL, BB stDev 3rd and 4th Band, LEMA
+//# *                                - Added ability to customize Pivot Support & Resistance Levels
+//# *                                - Added Camarilla Level 6  
+//# *                                - Enlarged labels with tooltips added  
+//# *                                - Imporved Price Range Meter 
+//# *
+//# * ══════════════════════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════════════════════════ //
+
+
+study("Pivot Points", shorttitle="PVT", overlay=true, max_lines_count=175)
+
+
+// ---------------------------------------------------------------------------------------------- //
+// Definitions ---------------------------------------------------------------------------------- //
+
+group_pick_a_pivot  = "Pivot Points Setup"
+group_pp_l          = "Pivot Points Line/Label Customization"
+group_tools         = "Tool Add-Ons"
+group_indicators    = "Indicator Add-Ons"
+group_panel         = "Statistical Panel Add-Ons"
+
+tooltip_pick_a_pivot= "A pivot point is a technical analysis indicator used to determine the overall trend of the market over different time frames"
+
+tooltip_sentiment   = "Market Sentiment Meter is based on price levels compared to central pivot range and pivot support and resistance levels"
+
+tooltip_range       = "Displays graphical price range during the higher time frame period as well its previous higher time frame range\n" +
+                       "includes the range numerical display calculated based on selected ATR period and multiplier"
+
+tooltip_panel       = "provides evaluated result of some of most used technical indicators and some custom interpreted indicators"
+
+tooltip_adx         = "ADX Colored Directional Movement Line is custom interpretation of Directional Movement (DMI) with aim to present all 3 DMI indicator components with SINGLE line\n" +
+                       "Plotted on top of the Main Price Chart\nUsage details may be found when you hover over Statistical Panel"
+
+tooltpi_bb          = "A Bollinger Band is a technical analysis tool defined by a set of lines plotted two standard deviations (positively and negatively) away from a simple moving average (SMA) of the security's price\n" +
+                       "This customization allows plotting of eight bands that can be adjusted to user preferences"
+
+tooltip_linreg      = "A line that best fits the prices specified over a user-defined time period. It is calculated using the least squares method\n" +
+                       "Both Upper/Lower and Standart Devaiation channels are plotted"
+
+tooltip_log_ema     = "Logistic Map Equation with combination of Exponential Moving Average ( EMA )"
+
+tooltip_pma         = "Volatility Colored Price/MA Line, Custom interpretation of the idea “Prices high above the moving average (MA) or low below it are likely to be remedied in the future by a reverse price movement”\n" +
+                       "Plotted on bottom of the Main Price Chart\nUsage details may be found when you hover over Statistical Panel\n" +
+                       "for further details, please visit study Price Distance to its MA by DGT"
+
+tooltip_vwcb        = "Volume Weighted Bars, a study of Kıvanç Özbilgiç, aims to present whether volume supports price movements"
+
+tooltip_ichimoku    = "The Ichimoku Cloud, is a collection of technical indicators that give it a unique capacity to show support and resistance levels, momentum and trend direction"
+
+tooltip_adx_pma_line= "◁ how to read adx colored dmi line ▷ \n" + 
+                       "* triangle shapes:\n" + 
+                       " ▲- bullish : diplus >= diminus\n" +
+                       " ▼- bearish : diplus < diminus\n" +
+                       "* colors:\n" +
+                       "  green - bullish trend : adx >= strongTrend and di+ > di-\n" + 
+                       "  red - bearish trend : adx >= strongTrend and di+ < di- \n" + 
+                       "  gray - no trend : weakTrend < adx < strongTrend\n" + 
+                       "  yellow - weak trend : adx < weakTrend\n" + 
+                       "* color density:\n" + 
+                       "  darker : adx growing\n" + 
+                       "  lighter : adx falling \n\n" + 
+                       "◁ how to read volatility colored price/ma line ▷ \n" + 
+                       "* triangle shapes:\n" + 
+                       " ▲ – bullish, price action above moving average\n" + 
+                       " ▼ – bearish, price action below moving average\n" + 
+                       "* colors:\n" + 
+                       " gray/black - low volatility\n" + 
+                       " green/red – price action in threshold bands\n" + 
+                       " dark green/red – price action exceeds threshold bands\n\n" + 
+                       "evaluation given herein does not constitute professional and/or financial advice"
+
+tooltip_vwap        = "Volume Weighted Average Price (VWAP) is a technical analysis tool used to measure the average price weighted by volume. VWAP is typically used with intraday charts as a way to determine the general direction of intraday prices. It's similar to a moving average in that when price is above VWAP, prices are rising and when price is below VWAP, prices are falling. VWAP is primarily used by technical analysts to identify market trend"
+tooltip_rsi         = "Relative strength index. It is calculated based on rma's of upward and downward change of x"
+
+tooltip_stoch       = "A stochastic oscillator is a momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period of time"
+
+tooltip_macd        = "Moving average convergence divergence (MACD) is a trend-following momentum indicator that shows the relationship between two moving averages of a security’s price"
+
+
+// -Inputs ══════════════════════════════════════════════════════════════════════════════════════ //
+
+display             = input("Camarilla", "Pick a Pivot", 
+                             options=["Camarilla", "DeMark", "Fibonacci", "Floor", "Swing", "Woodie", "🔕 None"]                    , group = group_pick_a_pivot, tooltip = tooltip_pick_a_pivot)
+htf_mode            = input('Auto'     , "Pivot Points TF", options=['Auto', 'User Defined']                    , inline = "HTF"    , group = group_pick_a_pivot)
+i_htf_user          = input("Weekly"   , "          or User Defined", options = ["15 Min", "1 Hour", "4 Hour", "Daily", "Weekly", "Monthly", "Quarterly", "Yearly"], inline = "HTF2"   , group = group_pick_a_pivot)
+htf_user            = i_htf_user == "15 Min" ? "15" : i_htf_user == "1 Hour" ? "60" : i_htf_user == "4 Hour" ? "240" : i_htf_user == "Daily" ? "D" : i_htf_user == "Weekly" ? "W" : i_htf_user == "Monthly" ? "M" : i_htf_user == "Quarterly" ? "3M" : "12M"
+
+srLabel             = input("Levels"   , "Pivot Support & Resistance Level Labels", options = ["Levels", "Levels + Prices", "None"] , group = group_pick_a_pivot)
+
+i_show_r            = input(true       , "Resistance Lines"                                                     , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r1           = input(true       , "R1"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r2           = input(true       , "R2"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r3           = input(true       , "R3"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r4           = input(true       , "R4"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r5           = input(true       , "R5"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_show_r6           = input(true       , "R6"                                                                   , inline = "rLevel1", group = group_pick_a_pivot)
+i_color_r           = input(#e91e63    , " "                                                                    , inline = "rLevel" , group = group_pick_a_pivot)
+i_style_r           = input("Solid"    , "", options = ["Dashed", "Dotted", "Solid"]                            , inline = "rLevel" , group = group_pick_a_pivot)
+i_width_r           = input(2          , "", minval = 1                                                         , inline = "rLevel" , group = group_pick_a_pivot)
+
+i_show_p            = input(true       , "Pivot Point Line"                                                     , inline = "ppLeve" , group = group_pick_a_pivot)
+i_color_p           = input(#0000f0    , " "                                                                    , inline = "ppLeve" , group = group_pick_a_pivot)
+i_style_p           = input("Solid"    , "", options = ["Dashed", "Dotted", "Solid"]                            , inline = "ppLeve" , group = group_pick_a_pivot)
+i_width_p           = input(2          , "", minval = 1                                                         , inline = "ppLeve" , group = group_pick_a_pivot)
+
+i_show_s            = input(true       , "Support Lines "                                                       , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s1           = input(true       , "S1"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s2           = input(true       , "S2"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s3           = input(true       , "S3"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s4           = input(true       , "S4"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s5           = input(true       , "S5"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_show_s6           = input(true       , "S6"                                                                   , inline = "sLevel1", group = group_pick_a_pivot)
+i_color_s           = input(#26a69a    , " "                                                                    , inline = "sLevel" , group = group_pick_a_pivot)
+i_style_s           = input("Solid"    , "", options = ["Dashed", "Dotted", "Solid"]                            , inline = "sLevel" , group = group_pick_a_pivot)
+i_width_s           = input(2          , "", minval = 1                                                         , inline = "sLevel" , group = group_pick_a_pivot)
+
+dispWM              = input("None"     , "Add Weekly/Monthly Pivots", 
+                             options=["Both", "Weekly", "Monthly", "None"]                                                          , group = group_pick_a_pivot)
+dispHist            = input("None"     , "Show Historical Pivots"   , 
+                             options=["Selected Pivots", "Central Pivot Range", "None"]                                             , group = group_pick_a_pivot)
+
+i_dispPVT           = input(true, "Subsequent Pivots, Hours Prior to Session End", inline = "SPVT", group = group_pick_a_pivot)
+i_when              = input(1, "", minval = 1, inline = "SPVT", group = group_pick_a_pivot)
+
+dispCPR             = input(true,      "Central Pivot Range"                                                                        , group = group_pick_a_pivot)
+i_color_tc          = input(#fa8072    , "TC"                                                                   , inline = "CPR"    , group = group_pick_a_pivot)
+i_color_cpr         = input(#4262ba    , "CPR"                                                                  , inline = "CPR"    , group = group_pick_a_pivot)
+i_color_bc          = input(#9ef2e8    , "BC"                                                                   , inline = "CPR"    , group = group_pick_a_pivot)
+i_style_cpr         = input("Dotted"   , "", options = ["Dashed", "Dotted", "Solid"]                            , inline = "CPR"    , group = group_pick_a_pivot)
+i_width_cpr         = input(2          , "", minval = 1                                                         , inline = "CPR"    , group = group_pick_a_pivot)
+
+dispOHLC            = input(true,      "Previous HTF OHLC"                                                      , inline = "OHLC"   , group = group_pick_a_pivot)
+i_style_ohlc        = input("Dashed"   , "", options = ["Dashed", "Dotted", "Solid"]                            , inline = "OHLC"   , group = group_pick_a_pivot)
+
+addons              = input(true,   "╞══════ ═══╡  Add-Ons On/Off  ╞═══ ══════╡"                                                    , group = "Add-Ons")
+
+isMeter             = input(true,   "Market Sentiment Meter"                                                                        , group = group_tools, tooltip = tooltip_sentiment)
+isRange             = input(true,   "Price Range Meter / ATR Range Meter  ⮯"                                                        , group = group_tools, tooltip = tooltip_range)
+atrLength           = input(14,     "  ⮩ ATR : Length"                                                         , inline = "ATR"    , group = group_tools)
+atrRange            = input(2.,     "Mult", step = .1                                                           , inline = "ATR"    , group = group_tools)
+isLabel             = input(true,   "On/Off | Statistical Panel | Position"                                     , inline = "STAT"   , group = group_tools, tooltip = tooltip_panel)
+pLabel              = input(3,      ""                                                                          , inline = "STAT"   , group = group_tools)
+
+dispBB              = input(true,    "⮮ Bollinger Bands ⮯ ═════════════════════╡"                                                  , group = group_indicators, tooltip = tooltpi_bb)
+extendBB            = input(false,   "⮩ Bollinger Bands : Extend Bands Display"                                                    , group = group_indicators)    
+bgShow              = input(false,   "⮩ Bollinger Bands : Fill Background"                                                         , group = group_indicators)
+bbSrc               = input(close,   "  ⮩ Bollinger Bands : Source"                                                                , group = group_indicators)
+bbLen               = input(21,      "  ⮩ Bollinger Bands : Length"             , minval=1                                         , group = group_indicators)
+bbMult1             = input(1.,      "  ⮩ Bollinger Bands : 1st Band Multiplier", minval=1                                         , group = group_indicators)
+bbMult2             = input(1.618,   "  ⮩ Bollinger Bands : 2nd Band Multiplier", minval=1                                         , group = group_indicators)
+bbMult3             = input(2.618,   "  ⮩ Bollinger Bands : 3rd Band Multiplier", minval=1                                         , group = group_indicators)
+bbMult4             = input(3.618,   "  ⮩ Bollinger Bands : 4th Band Multiplier", minval=1                                         , group = group_indicators)
+
+dispDM              = input(true,    "⮮ ADX Colored DMI Line ⮯ ══════════════════╡"                                                , group = group_indicators, tooltip = tooltip_adx)
+adxS                = input(14,      "  ⮩ DMI : ADX Smoothing"        , minval=1                                                   , group = group_indicators)
+diLen               = input(14,      "  ⮩ DMI : DI Length"            , minval=1                                                   , group = group_indicators)
+strTr               = input(25,      "  ⮩ DMI : Strong Trend Theshold"                                                             , group = group_indicators)
+wkTr                = input(17,      "  ⮩ DMI : Weak Trend Theshold"                                                               , group = group_indicators)
+
+dispPM              = input(true,    "⮮ Volatility Colored Price/MA Line ⮯ ══════════╡"                                            , group = group_indicators, tooltip = tooltip_pma)
+pmrLen              = input(21,      "  ⮩ P/MA : MA Length"       , minval=1                                                       , group = group_indicators)
+stDevL              = input(.75,     "  ⮩ P/MA : Lower Deviation" , minval = 0, step = .25, maxval = 3                             , group = group_indicators)
+stDevH              = input(2.,      "  ⮩ P/MA : Higher Deviation", minval = 0, step = .25, maxval = 3                             , group = group_indicators)
+
+vwcb                = input(true,    "⮮ Volume Weighted Colored Bars ⮯ ════════════╡"                                              , group = group_indicators , tooltip = tooltip_vwcb)
+vwcbLen             = input(21,      "  ⮩ VWCB : Volume MA Length", minval=1                                                       , group = group_indicators)
+vwcbUpper           = input(1.618,   "  ⮩ VWCB : Upper Theshold"  , minval = 0.1, step = .1                                        , group = group_indicators)
+vwcbLower           = input(.618,    "  ⮩ VWCB : Lower Theshold"  , minval = 0.1, step = .1                                        , group = group_indicators)
+
+dispLEMA            = input(true,    "⮮ Logistic EMA (LEMA) ⮯ ═══════════════════╡"                                                , group = group_indicators, tooltip = tooltip_log_ema)
+lemaSrc             = input(close,   "  ⮩ LEMA : Source"                                                                           , group = group_indicators)
+lemaLen             = input(21,      "  ⮩ LEMA : Length", minval=1, maxval=50                                                      , group = group_indicators)
+
+vwapPlot            = input(true,    "⮮ Volume Weighted Average Price (VWAP) ⮯ ═════╡"                                          , group = group_indicators, tooltip = tooltip_vwap)
+hideonDWM           = input(false, title="⮩ VWAP : Hide VWAP on 1D or Above", group = group_indicators)
+var anchor          = input(defval = "Session", title="  ⮩ VWAP : Anchor Period", type=input.string, 
+                             options=["Session", "Week", "Month", "Quarter", "Year", "Decade", "Century"], group = group_indicators)
+src                 = input(title = "  ⮩ VWAP : Source", type = input.source, defval = hlc3, group = group_indicators)
+offset              = input(0, title="  ⮩ VWAP : Offset", group = group_indicators)
+
+showBands           = input(true, title="⮩ VWAP : Calculate Bands, ", inline = "VWAP", group = group_indicators)
+stdevMult           = input(1.0, title="Bands Multiplier", inline = "VWAP", group = group_indicators)
+
+ichimoku            = input(true,    "⮮ Ichimoku Cloud Projection ⮯ ═══════════════╡"                                              , group = group_indicators, tooltip = tooltip_ichimoku)
+showKumo            = input(true,    "⮩ Ichimoku : Extend Kumo Cloud Display"                                                      , group = group_indicators)
+conversionPeriods   = input(9   ,    "  ⮩ Ichimoku : Conversion Line Periods", minval=1                                            , group = group_indicators)
+basePeriods         = input(26  ,    "  ⮩ Ichimoku : Base Line Periods"      , minval=1                                            , group = group_indicators)
+laggingSpan2Periods = input(52  ,    "  ⮩ Ichimoku : Lagging Span 2 Periods" , minval=1                                            , group = group_indicators)
+displacement        = input(26  ,    "  ⮩ Ichimoku : Displacement"           , minval=1                                            , group = group_indicators)
+
+linreg              = input(true,    "⮮ Linear Regression ⮯ ════════════════════╡"                                                 , group = group_indicators, tooltip = tooltip_linreg)
+upperMult           = input(2,       "  ⮩ LinReg : Upper Deviation"                                                                , group = group_indicators)
+lowerMult           = input(-2,      "  ⮩ LinReg : Lower Deviation"                                                                , group = group_indicators)
+showPearson         = input(false,   "⮩ LinReg : Show Pearson`s R"                                                                 , group = group_indicators)
+extendLines         = input(false,   "⮩ LinReg : Extend Lines"                                                                     , group = group_indicators)
+linregLength        = input(100,     "  ⮩ LinReg : Count" , minval = 2, maxval = 300                                               , group = group_indicators)
+linregSrc           = input(close,   "  ⮩ LinReg : Source"                                                                         , group = group_indicators)
+
+dummy6              = input(true,    "⮮ RSI Oscillator ⮯ ═══════════════════════╡"                                                 , group = group_panel, tooltip = tooltip_rsi)
+rsiSrc              = input(close,   "  ⮩ RSI : Source"                                                                            , group = group_panel)
+rsiLength           = input(14,      "  ⮩ RSI : Length"             , minval=1                                                     , group = group_panel)
+rsiOversold         = input(30,      "  ⮩ RSI : OverSold Theshold"  , minval=1                                                     , group = group_panel)
+rsiOverbought       = input(70,      "  ⮩ RSI : OverBought Theshold", minval=1                                                     , group = group_panel)
+
+dummy7              = input(true,    "⮮ Stochastic Oscillator ⮯ ══════════════════╡"                                               , group = group_panel, tooltip = tooltip_stoch)
+stochLengthK        = input(14  ,    "  ⮩ Stoch : %K"                 , minval=1                                                   , group = group_panel)
+stochLengthD        = input(3   ,    "  ⮩ Stoch : %D"                 , minval=1                                                   , group = group_panel)
+stochSmoothingK     = input(3   ,    "  ⮩ Stoch : Smoothing"          , minval=1                                                   , group = group_panel)
+stochOversold       = input(20  ,    "  ⮩ Stoch : OverSold Theshold"  , minval=1                                                   , group = group_panel)
+stochOverbought     = input(80  ,    "  ⮩ Stoch : OverBought Theshold", minval=1                                                   , group = group_panel)
+
+dummy8              = input(true,    "⮮ MACD Oscillator ⮯ ═════════════════════╡"                                                  , group = group_panel, tooltip = tooltip_macd)
+macdSrc             = input(close,   "  ⮩ MACD : Source"                                                                           , group = group_panel)
+macdFastLength      = input(12,      "  ⮩ MACD : Fast Length"            , minval=1                                                , group = group_panel) 
+macdSlowLength      = input(26,      "  ⮩ MACD : Slow Length"            , minval=1                                                , group = group_panel)
+macdSignalLength    = input(9,       "  ⮩ MACD : Signal Smoothing Length", minval=1                                                , group = group_panel)
+
+pll                 = input(377,    "Indicator and Historical Pivots"                                                              , group = "Ploting Length")
+
+// -Calculations ════════════════════════════════════════════════════════════════════════════════ //
+
+//------------------------------------------------------------------------------
+// auto higher time frame code snippet from pine wizard @LonesomeTheBlue 
+
+htf_auto = timeframe.period  == '1'   ? '60' : 
+           timeframe.period  == '3'   ? '60' : 
+           timeframe.period  == '5'   ? '240': 
+           timeframe.period  == '15'  ? '240': 
+           timeframe.period  == '30'  ? 'D'  : 
+           timeframe.period  == '45'  ? 'D'  : 
+           timeframe.period  == '60'  ? 'D'  : 
+           timeframe.period  == '120' ? 'D'  : 
+           timeframe.period  == '180' ? 'D'  : 
+           timeframe.period  == '240' ? 'D'  : 
+           timeframe.period  == 'D'   ? 'W'  : 
+           timeframe.period  == 'W'   ? 'M'  : 
+           '12M'
+htf = htf_mode == 'Auto' ? htf_auto : htf_user
+
+//------------------------------------------------------------------------------
+// security() function free higher timeframe price calculations
+
+f_htf_ohlc(_htf) =>
+    var htf_o  = 0. // higher time frame open
+    var htf_h  = 0. // higher time frame high
+    var htf_l  = 0. // higher time frame low
+    htf_c = close   // higher time frame close
+    var htf_ox = 0. // previous higher time frame open
+    var htf_hx = 0. // previous higher time frame high
+    var htf_lx = 0. // previous higher time frame low
+    var htf_cx = 0. // previous higher time frame close
+
+    if change(time(_htf))
+        htf_ox := htf_o
+        htf_o  := open
+        htf_hx := htf_h
+        htf_h  := high
+        htf_lx := htf_l
+        htf_l  := low
+        htf_cx := htf_c[1]
+    else
+        htf_h  := max(high, htf_h) //high > htf_h ? high : htf_h
+        htf_l  := min(low , htf_l) //low  < htf_l ? low  : htf_l
+
+    [htf_ox, htf_hx, htf_lx, htf_cx, htf_o, htf_h, htf_l, htf_c]
+
+[htf_o1, htf_h1, htf_l1, htf_c1, htf_o  , htf_h, htf_l, htf_c] = f_htf_ohlc(htf)
+[htf_ow, htf_hw, htf_lw, htf_cw, htf_ow0, _    , _    , _    ] = f_htf_ohlc('W')
+[htf_om, htf_hm, htf_lm, htf_cm, htf_om0, _    , _    , _    ] = f_htf_ohlc('M')
+
+//------------------------------------------------------------------------------
+// Get Pivot Points and Support & Resistance Levels
+
+f_get_pivot(_o, _h, _l, _c, _o0) =>
+    var r6x = 0.
+    var r5x = 0.
+    var r4x = 0.
+    var r3x = 0.
+    var r2x = 0.
+    var r1x = 0.
+    var px  = 0.
+    var s1x = 0.
+    var s2x = 0.
+    var s3x = 0.
+    var s4x = 0.
+    var s5x = 0.
+    var s6x = 0.
+    
+    if display == "Camarilla"
+        r5x := (_h / _l) * _c
+        r4x := _c + (_h - _l) * 1.1 / 2
+        r3x := _c + (_h - _l) * 1.1 / 4
+        //r2x := _c + (_h - _l) * 1.1 / 6
+        //r1x := _c + (_h - _l) * 1.1 / 12
+        r6x := r5x + 1.168 * (r5x - r4x)
+        //s1x := _c - (_h - _l) * 1.1 / 12
+        //s2x := _c - (_h - _l) * 1.1 / 6
+        s3x := _c - (_h - _l) * 1.1 / 4
+        s4x := _c - (_h - _l) * 1.1 / 2
+        s5x := _c - (r5x - _c)
+        s6x := _c - (r6x - _c)
+
+    else if display == "DeMark"
+        x  = _c < _o ? _h + 2 * _l + _c : 
+             _c > _o ? 2 * _h + _l + _c : _h + _l + 2 * _c
+        px  := x / 4
+        s1x := x / 2 - _h
+        r1x := x / 2 - _l
+        
+    else if display == "Floor"
+        px  := avg(_h, _l, _c)
+        s1x := px * 2 - _h
+        s2x := px - (_h - _l)
+        s3x := _l - 2 * (_h - px)
+        r1x := px * 2 - _l
+        r2x := px + (_h - _l)
+        r3x := _h + 2 * (px - _l)
+        
+    else if display == "Fibonacci"
+        px  := avg(_h, _l, _c)
+        r3x := px + (_h - _l)
+        r2x := px + (_h - _l) * .618
+        r1x := px + (_h - _l) * .382
+        s1x := px - (_h - _l) * .382
+        s2x := px - (_h - _l) * .618
+        s3x := px - (_h - _l)
+        
+    else if display == "Swing"
+        r3x := _o0 + (_h - _l)
+        r2x := _o0 + (_h - _l) * .618
+        r1x := _o0 + (_h - _l) * .5
+        s1x := _o0 - (_h - _l) * .5
+        s2x := _o0 - (_h - _l) * .618
+        s3x := _o0 - (_h - _l)
+        
+    else if display == "Woodie"
+        px  := (_h + _l + 2 * _o0) / 4
+        r1x := 2 * px - _l
+        r2x := px + (_h - _l)
+        r3x := _h + 2 * (px - _l)
+        r4x := r3x + (_h - _l)
+        s1x := 2 * px - _h
+        s2x := px - (_h - _l)
+        s3x := _l - 2 * (_h - px)
+        s4x := s3x - (_h - _l)
+
+    [r6x, r5x, r4x, r3x, r2x, r1x, px, s1x, s2x, s3x, s4x, s5x, s6x]
+
+[r6m, r5m, r4m, r3m, r2m, r1m, pm, s1m, s2m, s3m, s4m, s5m, s6m] = f_get_pivot(htf_om, htf_hm, htf_lm, htf_cm, htf_om0)
+[r6w, r5w, r4w, r3w, r2w, r1w, pw, s1w, s2w, s3w, s4w, s5w, s6w] = f_get_pivot(htf_ow, htf_hw, htf_lw, htf_cw, htf_ow0)
+[r61, r51, r41, r31, r21, r11, p1, s11, s21, s31, s41, s51, s61] = f_get_pivot(htf_o1, htf_h1, htf_l1, htf_c1, htf_o)
+[r6 , r5 , r4 , r3 , r2 , r1 , p , s1 , s2 , s3 , s4 , s5 , s6 ] = f_get_pivot(htf_o , htf_h , htf_l , htf_c , htf_o)
+
+
+// Central Pivot Range
+f_cpr(_h, _l, _c) => [avg(_h, _l, _c), avg(_h, _l), 2 * avg(_h, _l, _c) - avg(_h, _l)]
+
+[cpr1, bc1, tc1] = f_cpr(htf_h1, htf_l1, htf_c1) 
+[cpr , bc , tc ] = f_cpr(htf_h , htf_l , htf_c )
+
+//------------------------------------------------------------------------------
+
+f_drawLineX(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width) =>
+    var id = line.new(_x1, _y1, _x2, _y2, _xloc, _extend, _color, _style, _width)
+    line.set_xy1(id, _x1, _y1)
+    line.set_xy2(id, _x2, _y2)
+    line.set_color(id, _color)
+
+f_drawLabelX(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip) =>
+    var id = label.new(_x, _y, _text, _xloc, _yloc, _color, _style, _textcolor, _size, _textalign, _tooltip)
+    label.set_xy     (id, _x, _y)
+    label.set_text   (id, _text)
+
+f_crossingLevelX(_price, _level) =>
+    (_level > _price and _level < _price[1]) or (_level < _price and _level > _price[1])
+
+f_getStyle(_style) =>
+    _style == "Solid" ? line.style_solid : _style == "Dotted" ? line.style_dotted : line.style_dashed
+
+//------------------------------------------------------------------------------
+// Linear Regression - Build-in : slight presentation changes
+
+extend = extendLines ? extend.right : extend.none
+
+calcSlope(linregSrc, linregLength) =>
+	max_bars_back(linregSrc, 300)
+	
+	if not barstate.islast or linregLength <= 1
+		[float(na), float(na), float(na)]
+	else
+		sumX    = 0.0
+		sumY    = 0.0
+		sumXSqr = 0.0
+		sumXY   = 0.0
+		
+		for i = 0 to linregLength - 1
+			val      = linregSrc[i]
+			per      = i + 1.0
+			sumX    := sumX + per
+			sumY    := sumY + val
+			sumXSqr := sumXSqr + per * per
+			sumXY   := sumXY + val * per
+		
+		slope     = (linregLength * sumXY - sumX * sumY) / (linregLength * sumXSqr - sumX * sumX)
+		average   = sumY / linregLength
+		intercept = average - slope * sumX / linregLength + slope
+		
+		[slope, average, intercept]
+[slope, average, intercept] = calcSlope(linregSrc, linregLength)
+
+calcDev(linregSrc, linregLength, slope, average, intercept) =>
+	upDev     = 0.0
+	dnDev     = 0.0
+	stdDevAcc = 0.0
+	dsxx      = 0.0
+	dsyy      = 0.0
+	dsxy      = 0.0
+	periods   = linregLength - 1
+	daY       = intercept + (slope * periods) / 2
+	val       = intercept
+	
+	for i = 0 to periods
+		price = high[i] - val
+		
+		if (price > upDev)
+			upDev := price
+		
+		price := val - low[i]
+		
+		if (price > dnDev)
+			dnDev := price
+		
+		price     := linregSrc[i]
+		dxt        = price - average
+		dyt        = val - daY
+		price     := price - val
+		stdDevAcc := stdDevAcc + price * price
+		dsxx      := dsxx + dxt * dxt
+		dsyy      := dsyy + dyt * dyt
+		dsxy      := dsxy + dxt * dyt
+		val       := val + slope
+		
+	stdDev   = sqrt(stdDevAcc / (periods == 0 ? 1 : periods))
+	pearsonR = dsxx == 0 or dsyy == 0 ? 0 : dsxy / sqrt(dsxx * dsyy)
+	
+	[stdDev, pearsonR, upDev, dnDev]
+
+[stdDev, pearsonR, upDev, dnDev] = calcDev(linregSrc, linregLength, slope, average, intercept)
+
+startPrice = intercept + slope * (linregLength - 1)
+endPrice   = intercept
+
+if addons and linreg
+    iStart = bar_index - linregLength + 1
+    iEnd   = bar_index
+    f_drawLineX(iStart, startPrice                     , iEnd, endPrice                     , xloc.bar_index, extend, startPrice > endPrice ? color.red : color.green, line.style_solid , 1)
+    f_drawLineX(iStart, startPrice + upperMult * stdDev, iEnd, endPrice + upperMult * stdDev, xloc.bar_index, extend, startPrice > endPrice ? color.red : color.green, line.style_dotted, 2)
+    f_drawLineX(iStart, startPrice + lowerMult * stdDev, iEnd, endPrice + lowerMult * stdDev, xloc.bar_index, extend, startPrice > endPrice ? color.red : color.green, line.style_dotted, 2)
+    f_drawLineX(iStart, startPrice + upDev             , iEnd, endPrice + upDev             , xloc.bar_index, extend, startPrice > endPrice ? color.red : color.green, line.style_dotted, 3)
+    f_drawLineX(iStart, startPrice - dnDev             , iEnd, endPrice - dnDev             , xloc.bar_index, extend, startPrice > endPrice ? color.red : color.green, line.style_dotted, 3)
+    
+    if f_crossingLevelX(close, endPrice)
+        alert("LinReg (PVTvX) : " + syminfo.ticker + " crossing linear regression line")
+    if f_crossingLevelX(close, endPrice + upperMult * stdDev)
+        alert("LinReg (PVTvX) : " + syminfo.ticker + " crossing linear regression upper standart deviation line")
+    if f_crossingLevelX(close, endPrice + lowerMult * stdDev)
+        alert("LinReg (PVTvX) : " + syminfo.ticker + " crossing linear regression lower standart deviation line")
+                    
+if addons and linreg and showPearson and not na(pearsonR)
+    f_drawLabelX(bar_index - linregLength + 1, startPrice - dnDev, tostring(pearsonR, "#.################"), xloc.bar_index, yloc.price, #00000000, label.style_label_up, #f000ff, size.normal, text.align_center, "Pearson`s R")
+
+//------------------------------------------------------------------------------
+// ADX Colored Directional Movement Index Line by DGT
+
+[diplus, diminus, adxValue] = dmi(diLen, adxS)
+
+dmiBull = diplus >= diminus and adxValue >= strTr
+dmiBear = diplus <  diminus and adxValue >= strTr
+dmiWeak = adxValue < strTr  and adxValue > wkTr
+
+dmiColor = dmiBull ? (adxValue > adxValue[1] ? #006400 : color.green   ) : 
+           dmiBear ? (adxValue > adxValue[1] ? #910000 : color.red     ) : 
+           dmiWeak ? (adxValue > adxValue[1] ? color.black : color.gray) : (adxValue > adxValue[1] ? #FFC40C : color.yellow) 
+
+//------------------------------------------------------------------------------
+// Price Distance to its Moving Average by DGT
+
+pmar = (close / sma(close, pmrLen) - 1) * 100
+[_, uL, lL] = bb(pmar, pmrLen * 10, stDevL)
+[_, uH, lH] = bb(pmar, pmrLen * 10, stDevH)
+
+[pmaColor, pmaText] = if pmar >= 0 
+    if pmar > uH
+        [#006400,     " 🟢 strong bullish\n   -over overbought zone"]
+    else if pmar < uH and pmar > uL
+        [color.green, " 🟢 bullish       \n   -in overbought zone"]
+    else
+        [color.gray,  " ⚫ trendless     \n   -low volotile price action in bullish zone"]
+else
+    if pmar < lH
+        [#910000,     " 🔴 strong bearish\n   -below oversold zone"]
+    else if pmar > lH and pmar < lL
+        [color.red,   " 🔴 bearish       \n   -in oversold zone"]
+    else
+        [color.black, " ⚫ trendless     \n   -low volotile price action in bearish zone"]
+
+//------------------------------------------------------------------------------
+// Volume Weighted Colored Bars by Kıvanç ÖZBİLGİÇ
+
+volMA = sma(volume, vwcbLen)
+
+vwcbColor = if close < open
+    if      volume > volMA * vwcbUpper
+        #910000
+    else if volume < volMA * vwcbLower
+        #FF9800
+else
+    if      volume > volMA * vwcbUpper
+        #006400
+    else if volume < volMA * vwcbLower
+        #7FFFD4
+
+//------------------------------------------------------------------------------
+// Ichimoku Cloud - build-in, slight presentation changes
+
+donchian(len) => avg(lowest(len), highest(len))
+
+conversionLine = donchian(conversionPeriods)
+baseLine       = donchian(basePeriods)
+leadLine1      = avg(conversionLine, baseLine)
+leadLine2      = donchian(laggingSpan2Periods)
+
+aboveCloud =  close > leadLine1[displacement - 1] and close > leadLine2[displacement - 1]
+belowCloud =  close < leadLine1[displacement - 1] and close < leadLine2[displacement - 1]
+inCloud    = (close > leadLine1[displacement - 1] and close < leadLine2[displacement - 1]) or 
+             (close < leadLine1[displacement - 1] and close > leadLine2[displacement - 1])
+
+//------------------------------------------------------------------------------
+// Bollinger Bands - build-in
+
+[_, u1, l1] = bb(bbSrc, bbLen, bbMult1)
+[_, u2, l2] = bb(bbSrc, bbLen, bbMult2)
+[_, u3, l3] = bb(bbSrc, bbLen, bbMult3)
+[_, u4, l4] = bb(bbSrc, bbLen, bbMult4)
+
+//------------------------------------------------------------------------------
+// Logistic EMA by DGT - custum application of Logistic Map Equation 
+// https://www.tradingview.com/script/jUuBT0bO-Logistic-EMA-w-Signals-by-DGT/
+
+logeq (_source, _length) => change(_source, _length) / _source[_length] * _source / highest(_length) * ( 1 - _source / highest(_length) )
+logema(_source, _length) => (logeq(lemaSrc, lemaLen) + 1) * ema(_source, _length)
+
+lema     = logema(lemaSrc, lemaLen)
+lema50   = logema(lemaSrc, 50)
+lema100  = logema(lemaSrc, 100)
+lema200  = logema(lemaSrc, 200)
+lemaHigh = logema(high, 11)
+lemaLow  = logema(low , 23)
+
+dir      = close > lemaHigh[1] ? 1 : close < lemaLow[1] ? -1 : 0
+trend    = valuewhen(dir != 0, dir, 0)
+
+maColor = lema > lema200 ? lema > lema100 ? lema > lema50 ? color.olive : color.aqua : color.orange : color.maroon
+hlColor = trend == 1 ? #006400 : #910000
+
+//------------------------------------------------------------------------------
+// Trading Psychology - Fear & Greed Index by DGT : Panel Add-On
+// https://www.tradingview.com/script/HfNGbuRt-Trading-Psychology-Fear-Greed-Index-by-DGT/
+
+slowLength = 144
+fastLength = 21
+smoothLen  = 5
+pmacd      = (close / ema(close, slowLength) - 1) * 100
+ror        = change(close, slowLength) / close[slowLength] * 100
+accDist    = close==high and close==low or high==low ? 0 : (2 * close - low - high) / (high - low)
+fgVol      = nz(volume)
+moneyFlow  = sum(accDist * fgVol, fastLength) / sum(fgVol, fastLength) * 100
+vix        = security ("VIX" , timeframe.period, -(close/ema(close, slowLength) - 1) * 100, barmerge.gaps_off, barmerge.lookahead_on)
+gold       = security ("GOLD", timeframe.period, -(1 - close[fastLength] / close) * 100   , barmerge.gaps_off, barmerge.lookahead_on)
+avg        = fgVol ? avg(pmacd, ror, vix, gold, moneyFlow) : avg(pmacd, ror, vix, gold)
+feargreed  = rma(avg, smoothLen)
+
+//------------------------------------------------------------------------------
+// VWAP - build-in
+computeVWAP(src, isNewPeriod, stDevMultiplier) =>
+	var float sumSrcVol = na
+	var float sumVol = na
+    var float sumSrcSrcVol = na
+    
+	sumSrcVol := isNewPeriod ? src * volume : src * volume + sumSrcVol[1]
+	sumVol := isNewPeriod ? volume : volume + sumVol[1]
+	// sumSrcSrcVol calculates the dividend of the equation that is later used to calculate the standard deviation
+	sumSrcSrcVol := isNewPeriod ? volume * pow(src, 2) : volume * pow(src, 2) + sumSrcSrcVol[1]
+	
+	_vwap = sumSrcVol / sumVol
+	variance = sumSrcSrcVol / sumVol - pow(_vwap, 2)
+	variance := variance < 0 ? 0 : variance
+	stDev = sqrt(variance)
+	
+	lowerBand = _vwap - stDev * stDevMultiplier
+	upperBand = _vwap + stDev * stDevMultiplier
+	
+	[_vwap, lowerBand, upperBand]
+
+timeChange(period) =>
+	change(time(period))
+
+isNewPeriod = na(src[1]) ? true :
+ anchor == "Session" ? timeChange("D") :
+ anchor == "Week"    ? timeChange("W") :
+ anchor == "Month"   ? timeChange("M") :
+ anchor == "Quarter" ? timeChange("3M") :
+ anchor == "Year"    ? timeChange("12M") :
+ anchor == "Decade"  ? timeChange("12M") and year % 10 == 0 :
+ anchor == "Century" ? timeChange("12M") and year % 100 == 0 :
+ false
+	
+float vwapValue = na
+float std = na
+float upperBandValue = na
+float lowerBandValue = na
+
+if not (hideonDWM and timeframe.isdwm)
+    [_vwap, bottom, top] = computeVWAP(src, isNewPeriod, stdevMult)
+    vwapValue := _vwap
+    upperBandValue := showBands ? top : na
+    lowerBandValue := showBands ? bottom : na
+
+// -Plotting ════════════════════════════════════════════════════════════════════════════════════ //
+
+time_x1w  = valuewhen(change(time('W')), time, 0)
+time_x1m  = valuewhen(change(time('M')), time, 0)
+time_x10  = valuewhen(change(time(htf)), time, 1)
+time_x11  = valuewhen(change(time(htf)), time, 0)
+time_x21  = time_x11 + time_x11 - time_x10
+time_x1   = time_x21 + round(change(time) * 7)
+time_x2   = time_x21 + round(change(time) * 13)
+
+islast    = security(syminfo.tickerid, htf, barstate.islast, lookahead = true)
+htf_time  = change(time(htf))
+
+//------------------------------------------------------------------------------
+// Pivots
+var ln  = array.new_line()
+var lb  = array.new_label()
+
+if change(time) and array.size(ln) > 0
+
+    for i = 1 to array.size(ln)
+        ln1 = array.shift(ln)
+        line.delete(ln1)
+
+    if srLabel != "None"  
+        for i = 1 to array.size(lb)
+            lb1 = array.shift(lb)
+            label.delete(lb1)
+
+f_drawLineLabelX(_x1, _y, _x2, _c, _s, _w, _lb) =>
+    if _y > 0
+        array.push(ln, line.new(_x1, _y, _x2, _y, xloc.bar_time, extend.none, _c, _s, _w))
+        
+        if srLabel != "None" and _lb != ''
+            array.push(lb, label.new(time_x21, _y, srLabel == "Levels" ? _lb : _lb + ' ' + tostring(_y, format.mintick), xloc.bar_time, yloc.price, #00000000, label.style_label_left, _c, size.normal, tooltip=_lb + ' ' + tostring(_y, format.mintick)))
+
+f_processLevelX(_show, _x1, _y, _x2, _c, _s, _w, _lb, _a) =>
+    if _show
+        f_drawLineLabelX(_x1, _y, _x2, _c, _s, _w, _lb)
+        
+    if f_crossingLevelX(close, _y) and _show
+        alert(display + " (PVTvX) : " + syminfo.ticker + " crossing " + display + " level " + _lb)
+
+when = barstate.islast and display != "🔕 None" and i_dispPVT and time_x21 - timenow < 3600000 * i_when
+
+f_processLevelX(when and i_show_r and i_show_r6, time_x1 , r6 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+f_processLevelX(when and i_show_r and i_show_r5, time_x1 , r5 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+f_processLevelX(when and i_show_r and i_show_r4, time_x1 , r4 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+f_processLevelX(when and i_show_r and i_show_r3, time_x1 , r3 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+f_processLevelX(when and i_show_r and i_show_r2, time_x1 , r2 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+f_processLevelX(when and i_show_r and i_show_r1, time_x1 , r1 , time_x2 , i_color_r, f_getStyle(i_style_r), i_width_r, ''  , false)
+
+f_processLevelX(when and i_show_p , time_x1 , p  , time_x2 , i_color_p, f_getStyle(i_style_p), i_width_p, ''  , false)
+
+f_processLevelX(when and i_show_s and i_show_s1, time_x1 , s1 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+f_processLevelX(when and i_show_s and i_show_s2, time_x1 , s2 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+f_processLevelX(when and i_show_s and i_show_s3, time_x1 , s3 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+f_processLevelX(when and i_show_s and i_show_s4, time_x1 , s4 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+f_processLevelX(when and i_show_s and i_show_s5, time_x1 , s5 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+f_processLevelX(when and i_show_s and i_show_s6, time_x1 , s6 , time_x2 , i_color_s, f_getStyle(i_style_s), i_width_s, ''  , false)
+
+when := barstate.islast and display != "🔕 None"
+
+f_processLevelX(when and i_show_r and i_show_r6, time_x11, r61, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R6', true )
+f_processLevelX(when and i_show_r and i_show_r5, time_x11, r51, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R5', true )
+f_processLevelX(when and i_show_r and i_show_r4, time_x11, r41, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R4', true )
+f_processLevelX(when and i_show_r and i_show_r3, time_x11, r31, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R3', true )
+f_processLevelX(when and i_show_r and i_show_r2, time_x11, r21, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R2', true )
+f_processLevelX(when and i_show_r and i_show_r1, time_x11, r11, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R1', true )
+
+plot(dispHist == "Selected Pivots" and i_show_r6 and r61 > 0 ? htf_time or islast ? na : r61 : na, "Historical R6", #e91e63, 1, plot.style_linebr, show_last = pll) 
+plot(dispHist == "Selected Pivots" and i_show_r5 and r51 > 0 ? htf_time or islast ? na : r51 : na, "Historical R5", #e91e63, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_r4 and r41 > 0 ? htf_time or islast ? na : r41 : na, "Historical R4", #e91e63, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_r3 and r31 > 0 ? htf_time or islast ? na : r31 : na, "Historical R3", #e91e63, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_r2 and r21 > 0 ? htf_time or islast ? na : r21 : na, "Historical R2", #e91e63, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_r1 and r11 > 0 ? htf_time or islast ? na : r11 : na, "Historical R1", #e91e63, 1, plot.style_linebr, show_last = pll)
+
+f_processLevelX(when and i_show_p , time_x11, p1 , time_x21, i_color_p, f_getStyle(i_style_p), i_width_p, 'P' , true )
+plot(dispHist == "Selected Pivots" and i_show_p and p1  > 0 ? htf_time or islast ? na : p1  : na, "Historical P ", #0000f0, 1, plot.style_linebr, show_last = pll)
+
+f_processLevelX(when and i_show_s and i_show_s1, time_x11, s11, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S1', true )
+f_processLevelX(when and i_show_s and i_show_s2, time_x11, s21, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S2', true )
+f_processLevelX(when and i_show_s and i_show_s3, time_x11, s31, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S3', true )
+f_processLevelX(when and i_show_s and i_show_s4, time_x11, s41, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S4', true )
+f_processLevelX(when and i_show_s and i_show_s5, time_x11, s51, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S5', true )
+f_processLevelX(when and i_show_s and i_show_s6, time_x11, s61, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S6', true )
+
+plot(dispHist == "Selected Pivots" and i_show_s1 and s11 > 0 ? htf_time or islast ? na : s11 : na, "Historical S1", #26a69a, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_s2 and s21 > 0 ? htf_time or islast ? na : s21 : na, "Historical S2", #26a69a, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_s3 and s31 > 0 ? htf_time or islast ? na : s31 : na, "Historical S3", #26a69a, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_s4 and s41 > 0 ? htf_time or islast ? na : s41 : na, "Historical S4", #26a69a, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_s5 and s51 > 0 ? htf_time or islast ? na : s51 : na, "Historical S5", #26a69a, 1, plot.style_linebr, show_last = pll)
+plot(dispHist == "Selected Pivots" and i_show_s6 and s61 > 0 ? htf_time or islast ? na : s61 : na, "Historical S6", #26a69a, 1, plot.style_linebr, show_last = pll)
+
+when := barstate.islast and dispWM == "Weekly" or dispWM == "Both"
+
+f_processLevelX(when and i_show_r and i_show_r6, time_x1w, r6w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R6W', true)
+f_processLevelX(when and i_show_r and i_show_r5, time_x1w, r5w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R5W', true)
+f_processLevelX(when and i_show_r and i_show_r4, time_x1w, r4w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R4W', true)
+f_processLevelX(when and i_show_r and i_show_r3, time_x1w, r3w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R3W', true)
+f_processLevelX(when and i_show_r and i_show_r2, time_x1w, r2w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R2W', true)
+f_processLevelX(when and i_show_r and i_show_r1, time_x1w, r1w, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R1W', true)
+    
+f_processLevelX(when and i_show_p              , time_x1w, pw , time_x21, i_color_p, f_getStyle(i_style_p), i_width_p, 'PW ', true)
+    
+f_processLevelX(when and i_show_s and i_show_s1, time_x1w, s1w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S1W', true)
+f_processLevelX(when and i_show_s and i_show_s2, time_x1w, s2w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S2W', true)
+f_processLevelX(when and i_show_s and i_show_s3, time_x1w, s3w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S3W', true)
+f_processLevelX(when and i_show_s and i_show_s4, time_x1w, s4w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S4W', true)
+f_processLevelX(when and i_show_s and i_show_s5, time_x1w, s5w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S5W', true)
+f_processLevelX(when and i_show_s and i_show_s6, time_x1w, s6w, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S6W', true)
+
+when := barstate.islast and dispWM == "Monthly" or dispWM == "Both"
+
+f_processLevelX(when and i_show_r and i_show_r6, time_x1m, r6m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R6M', true)
+f_processLevelX(when and i_show_r and i_show_r5, time_x1m, r5m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R5M', true)
+f_processLevelX(when and i_show_r and i_show_r4, time_x1m, r4m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R4M', true)
+f_processLevelX(when and i_show_r and i_show_r3, time_x1m, r3m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R3M', true)
+f_processLevelX(when and i_show_r and i_show_r2, time_x1m, r2m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R2M', true)
+f_processLevelX(when and i_show_r and i_show_r1, time_x1m, r1m, time_x21, i_color_r, f_getStyle(i_style_r), i_width_r, 'R1M', true)
+        
+f_processLevelX(when and i_show_p              , time_x1m, pm , time_x21, i_color_p, f_getStyle(i_style_p), i_width_p, 'PM ', true)
+
+f_processLevelX(when and i_show_s and i_show_s1, time_x1m, s1m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S1M', true)
+f_processLevelX(when and i_show_s and i_show_s2, time_x1m, s2m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S2M', true)
+f_processLevelX(when and i_show_s and i_show_s3, time_x1m, s3m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S3M', true)
+f_processLevelX(when and i_show_s and i_show_s4, time_x1m, s4m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S4M', true)
+f_processLevelX(when and i_show_s and i_show_s5, time_x1m, s5m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S5M', true)
+f_processLevelX(when and i_show_s and i_show_s6, time_x1m, s6m, time_x21, i_color_s, f_getStyle(i_style_s), i_width_s, 'S6M', true)
+
+when := barstate.islast and dispCPR
+
+f_processLevelX(when, time_x11, tc1 , time_x21, i_color_tc , f_getStyle(i_style_cpr), i_width_cpr, 'TC' , false)
+f_processLevelX(when, time_x11, cpr1, time_x21, i_color_cpr, f_getStyle(i_style_cpr), i_width_cpr, 'CPR', false)
+f_processLevelX(when, time_x11, bc1 , time_x21, i_color_bc , f_getStyle(i_style_cpr), i_width_cpr, 'BC' , false)
+
+when := barstate.islast and dispCPR and i_dispPVT and time_x21 - timenow < 3600000 * i_when
+
+f_processLevelX(when, time_x1 , tc  , time_x2 , i_color_tc , f_getStyle(i_style_cpr), i_width_cpr, ''   , false)
+f_processLevelX(when, time_x1 , cpr , time_x2 , i_color_cpr, f_getStyle(i_style_cpr), i_width_cpr, ''   , false)
+f_processLevelX(when, time_x1 , bc  , time_x2 , i_color_bc , f_getStyle(i_style_cpr), i_width_cpr, ''   , false)
+
+plot(dispHist == "Central Pivot Range" and dispCPR ? htf_time or islast ? na : cpr1 : na, "Historical CPR P ", #fa8072, 1, plot.style_cross, show_last = pll)
+plot(dispHist == "Central Pivot Range" and dispCPR ? htf_time or islast ? na : bc1  : na, "Historical CPR BC", #4262ba, 1, plot.style_cross, show_last = pll)
+plot(dispHist == "Central Pivot Range" and dispCPR ? htf_time or islast ? na : tc1  : na, "Historical CPR TC", #9ef2e8, 1, plot.style_cross, show_last = pll)
+
+if barstate.islast and dispOHLC
+    ohlcC = htf_o1 > htf_c1 ? color.red : color.green
+
+    f_drawLineX(time_x10, htf_o1, time_x21, htf_o1, xloc.bar_time, extend.none, ohlcC, f_getStyle(i_style_ohlc), 1)
+    f_drawLineX(time_x10, htf_h1, time_x21, htf_h1, xloc.bar_time, extend.none, ohlcC, f_getStyle(i_style_ohlc), 2)
+    f_drawLineX(time_x10, htf_l1, time_x21, htf_l1, xloc.bar_time, extend.none, ohlcC, f_getStyle(i_style_ohlc), 2)
+    f_drawLineX(time_x10, htf_c1, time_x21, htf_c1, xloc.bar_time, extend.none, ohlcC, f_getStyle(i_style_ohlc), 1)
+    
+    f_drawLabelX(time_x10, htf_o1, "O", xloc.bar_time, yloc.price, #00000000, label.style_label_right, ohlcC, size.normal, text.align_center, "PREVIOUS HTF OPEN : "  + tostring(htf_o1, format.mintick))
+    f_drawLabelX(time_x10, htf_h1, "H", xloc.bar_time, yloc.price, #00000000, label.style_label_right, ohlcC, size.normal, text.align_center, "PREVIOUS HTF HIGH : "  + tostring(htf_h1, format.mintick))
+    f_drawLabelX(time_x10, htf_l1, "L", xloc.bar_time, yloc.price, #00000000, label.style_label_right, ohlcC, size.normal, text.align_center, "PREVIOUS HTF LOW : "   + tostring(htf_l1, format.mintick))
+    f_drawLabelX(time_x10, htf_c1, "C", xloc.bar_time, yloc.price, #00000000, label.style_label_right, ohlcC, size.normal, text.align_center, "PREVIOUS HTF CLOSE : " + tostring(htf_c1, format.mintick))
+
+if f_crossingLevelX(close, htf_h1) and barstate.islast and dispOHLC
+    alert("OHLC (PVTvX) : " + syminfo.ticker + " crossing previous htf high")
+if f_crossingLevelX(close, htf_l1) and barstate.islast and dispOHLC
+    alert("OHLC (PVTvX) : " + syminfo.ticker + " crossing previous htf low")
+
+//------------------------------------------------------------------------------
+// ADX Colored Directional Movement Line by DGT 
+
+didir = diplus >= diminus ? true : false
+plotshape(addons and dispDM and diplus >= diminus, style=shape.triangleup  , location=location.top, color=dmiColor, title="DMI Bull", show_last = pll)
+plotshape(addons and dispDM and diplus <  diminus, style=shape.triangledown, location=location.top, color=dmiColor, title="DMI Bear", show_last = pll)
+
+//------------------------------------------------------------------------------
+// Price Distance to its Moving Average by DGT
+
+plotshape(addons and dispPM and pmar >= 0, style=shape.triangleup  , location=location.bottom, color=pmaColor, title="Price/MA Bull", show_last = pll)
+plotshape(addons and dispPM and pmar <  0, style=shape.triangledown, location=location.bottom, color=pmaColor, title="Price/MA Bear", show_last = pll)
+
+//------------------------------------------------------------------------------
+// Volume weighted Colored Bars by KIVANÇ ÖZBİLGİÇ
+
+barcolor(addons and nz(volume) and vwcb ? vwcbColor : na, title = "Volume Based Colored Bars by [KıvançÖZBİLGİÇ]", show_last = pll)
+
+//------------------------------------------------------------------------------
+// Ichimoku Cloud - presentation customized by DGT
+
+pi1 = plot(leadLine1, offset = displacement - 1, color=color.green, title="Lead 1", display=display.none, show_last = displacement -1)
+pi2 = plot(leadLine2, offset = displacement - 1, color=color.red  , title="Lead 2", display=display.none, show_last = displacement -1)
+fill(pi1, pi2, color = addons and ichimoku ? leadLine1 > leadLine2 ? color.new(color.green, 73) : color.new(color.red, 73) : na, show_last = showKumo ? pll + 1 : 1)
+
+//------------------------------------------------------------------------------
+// Bolligner Bands - presentation customized by DGT
+
+pu4 = plot(addons and dispBB and islast and not extendBB ? u4 : na, "Bollinger Bands Upper stDev bbMult4", color.red   , 1)
+pu3 = plot(addons and dispBB and islast and not extendBB ? u3 : na, "Bollinger Bands Upper stDev bbMult3", color.orange, 1)
+pu2 = plot(addons and dispBB and islast and not extendBB ? u2 : na, "Bollinger Bands Upper stDev bbMult2", color.aqua  , 1)
+pu1 = plot(addons and dispBB and islast and not extendBB ? u1 : na, "Bollinger Bands Upper stDev bbMult1", color.silver, 1)
+pl1 = plot(addons and dispBB and islast and not extendBB ? l1 : na, "Bollinger Bands Lower stDev bbMult1", color.silver, 1)
+pl2 = plot(addons and dispBB and islast and not extendBB ? l2 : na, "Bollinger Bands Lower stDev bbMult2", color.aqua  , 1)
+pl3 = plot(addons and dispBB and islast and not extendBB ? l3 : na, "Bollinger Bands Lower stDev bbMult3", color.orange, 1)
+pl4 = plot(addons and dispBB and islast and not extendBB ? l4 : na, "Bollinger Bands Lower stDev bbMult4", color.red   , 1)
+
+fill(pl3, pl4, color=bgShow ? color.new(#006400, 73)     : na)
+fill(pl2, pl3, color=bgShow ? color.new(color.green, 73) : na)
+fill(pl1, pl2, color=bgShow ? color.new(#9ef2e8, 73)     : na)
+fill(pu1, pu2, color=bgShow ? color.new(#fa8072, 73)     : na)
+fill(pu2, pu3, color=bgShow ? color.new(color.red, 73)   : na)
+fill(pu3, pu4, color=bgShow ? color.new(#910000, 73)     : na)
+
+pu4e = plot(addons and dispBB and extendBB ? u4 : na, "Bollinger Bands Upper stDev bbMult4", color.red   , 1, show_last = pll)
+pu3e = plot(addons and dispBB and extendBB ? u3 : na, "Bollinger Bands Upper stDev bbMult3", color.orange, 1, show_last = pll)
+pu2e = plot(addons and dispBB and extendBB ? u2 : na, "Bollinger Bands Upper stDev bbMult2", color.aqua  , 1, show_last = pll)
+pu1e = plot(addons and dispBB and extendBB ? u1 : na, "Bollinger Bands Upper stDev bbMult1", color.silver, 1, show_last = pll)
+pl1e = plot(addons and dispBB and extendBB ? l1 : na, "Bollinger Bands Lower stDev bbMult1", color.silver, 1, show_last = pll)
+pl2e = plot(addons and dispBB and extendBB ? l2 : na, "Bollinger Bands Lower stDev bbMult2", color.aqua  , 1, show_last = pll)
+pl3e = plot(addons and dispBB and extendBB ? l3 : na, "Bollinger Bands Lower stDev bbMult3", color.orange, 1, show_last = pll)
+pl4e = plot(addons and dispBB and extendBB ? l4 : na, "Bollinger Bands Lower stDev bbMult4", color.red   , 1, show_last = pll)
+
+fill(pl3e, pl4e, color=bgShow ? color.new(#006400, 73)     : na)
+fill(pl2e, pl3e, color=bgShow ? color.new(color.green, 73) : na)
+fill(pl1e, pl2e, color=bgShow ? color.new(#9ef2e8, 73)     : na)
+fill(pu1e, pu2e, color=bgShow ? color.new(#fa8072, 73)     : na)
+fill(pu2e, pu3e, color=bgShow ? color.new(color.red, 73)   : na)
+fill(pu3e, pu4e, color=bgShow ? color.new(#910000, 73)     : na)
+
+if f_crossingLevelX(close, u4)
+    alert("BB (PVTvX) : " + syminfo.ticker + " crossing bollinger bands upper standart deviation line " + tostring(bbMult4))
+if f_crossingLevelX(close, u3)
+    alert("BB (PVTvX) : " + syminfo.ticker + " crossing bollinger bands upper standart deviation line " + tostring(bbMult3))
+if f_crossingLevelX(close, l3)
+    alert("BB (PVTvX) : " + syminfo.ticker + " crossing bollinger bands lower standart deviation line " + tostring(bbMult3))
+if f_crossingLevelX(close, l4)
+    alert("BB (PVTvX) : " + syminfo.ticker + " crossing bollinger bands lower standart deviation line " + tostring(bbMult4))
+
+//------------------------------------------------------------------------------
+// Logistic EMA (LEMA) by DGT
+
+plot(addons and dispLEMA ? lema : na, "LEMA Trend         ", trend != trend[1] ? hlColor[1] : hlColor, 4, show_last = pll)
+plot(addons and dispLEMA ? lema : na, "Logistic EMA (LEMA)", maColor                                 , 2, show_last = pll)
+
+if f_crossingLevelX(close, lema)
+    alert("LEMA (PVTvX) : " + syminfo.ticker + " crossing Logistic EMA (LEMA)")
+    
+//------------------------------------------------------------------------------
+// Volume Weighted Average Price (VWAP) - Build-In
+
+plot(addons and vwapPlot ? vwapValue : na, title="VWAP", offset=offset, show_last = pll)
+
+upperBand = plot(addons and vwapPlot ? upperBandValue : na, title="VWAP Upper Band", color=color.green, display=display.none, offset=offset, show_last = pll)
+lowerBand = plot(addons and vwapPlot ? lowerBandValue : na, title="VWAP Lower Band", color=color.green, display=display.none, offset=offset, show_last = pll)
+
+fill(upperBand, lowerBand, title="Bands Fill", color= showBands ? color.new(color.blue, 73) : na, show_last = pll)
+
+//------------------------------------------------------------------------------
+// Statistical Panel
+
+if addons and isLabel
+
+    // Directional Movement
+    diStat  = diplus >= diminus ? 
+              ", diplus(" + tostring(diplus, "#.##") + ") >= diminus(" + tostring(diminus, "#.##") + ")" :
+              ", diplus(" + tostring(diplus, "#.##") + ") < diminus("  + tostring(diminus, "#.##") + ")"
+    adxMom  = adxValue > adxValue[1] ? " and rising" : " and falling"
+    dmiText = dmiBull ?  "🟢 bullish  \n   -adx(" + tostring(adxValue, "#.##") + ")" + adxMom + diStat:
+              dmiBear ?  "🔴 bearish  \n   -adx(" + tostring(adxValue, "#.##") + ")" + adxMom + diStat: 
+                         "⚫ trendless\n   -adx(" + tostring(adxValue, "#.##") + ")" + adxMom + diStat
+
+    // Ichimoku Cloud
+    tkStat  = conversionLine >= baseLine ? 
+              "\n   -tenkan-sen(" + tostring(conversionLine, format.mintick) + ") >= kijun-sen(" + tostring(baseLine, format.mintick) + ")" :
+              "\n   -tenkan-sen(" + tostring(conversionLine, format.mintick) + ") < kijun-sen("  + tostring(baseLine, format.mintick) + ")"
+    ichiTxt = aboveCloud ? "🟢 bullish\n   -price action above the kumo cloud" + tkStat :
+              belowCloud ? "🔴 bearish\n   -price action below the kumo cloud" + tkStat :
+              inCloud    ? "⚫ trendless or transitioning\n   -price action within the kumo cloud" + tkStat : na
+
+    // RSI
+    rsiValue = rsi(rsiSrc, rsiLength)
+    rsiText  = rsiValue >= 50 ? 
+               rsiValue > rsiOverbought ? "🟢 bullish (overbought)" : rsiValue > 60 ? "🟢 bullish (rsi > 60)" : "⚫ bullish (50 < rsi < 60)" :
+               rsiValue < rsiOversold   ? "🔴 bearish (oversold)"   : rsiValue < 40 ? "🔴 bearish (rsi < 40)" : "⚫ bearish (40 < rsi < 50)"
+    rsiText := change(rsiValue) > 0 ? 
+               rsiText + "\n   -rsi(" + tostring(rsiValue, "#.##") + ") and rising" : 
+               rsiText + "\n   -rsi(" + tostring(rsiValue, "#.##") + ") and falling"
+
+    // Stochastic
+    stochK     = sma(stoch(close, high, low, stochLengthK), stochSmoothingK)
+    stochD     = sma(stochK, stochLengthD)
+    stochMom   = change(stochK) > 0 ? ", stochK rising" : ", stochK falling"
+    stochStat  = stochK > stochOverbought ? " (overbought)" : stochK < stochOversold ? " (oversold)" : ""
+    stochText  = stochK > stochD ? 
+                 "🟢 bullish" + stochStat + "\n   -%k(" + tostring(stochK, "#.##") + ") > %d(" + tostring(stochD, "#.##") + ")" + stochMom : 
+                 "🔴 bearish" + stochStat + "\n   -%k(" + tostring(stochK, "#.##") + ") < %d(" + tostring(stochD, "#.##") + ")" + stochMom
+
+    // MACD
+    [macdLine, signalLine, histLine] = macd(macdSrc, macdFastLength, macdSlowLength, macdSignalLength)
+    macdMom  = change(histLine) > 0 ? ", momentum rising" : ", momentum falling"
+    macdText = macdLine > signalLine ? 
+               "🟢 bullish (macd > signal)" + macdMom : 
+               "🔴 bearish (macd < signal)" + macdMom
+
+    // Fear & Greed
+    fgTxt  = feargreed > 73  ? "🟢 extreame greed" : 
+             feargreed > 33  ? "🟢 greed"          : 
+             feargreed < -25 ? "🔴 fear"           : 
+             feargreed < -41 ? "🔴 extreame fear"  : "⚫ neutral"
+    fgTxt := fgTxt + " (" + tostring(round(feargreed)) + "%)"
+    
+    text = "🖜 " + display + " Pivots for " + syminfo.description + "\n   -time frame (" + timeframe.period  + "), pivot time frame (" + htf + ")" +
+           "\n\nDirectional Movement : " + dmiText   + 
+           "\n\nIchimoku Cloud : "       + ichiTxt   + 
+           "\n\nPrice/MA : "             + pmaText   + 
+           "\n\nRSI : "                  + rsiText   + 
+           "\n\nStochastic : "           + stochText + 
+           "\n\nMACD : "                 + macdText  + 
+           "\n\nFear & Greed : "         + fgTxt
+
+    f_drawLabelX(time_x21 - timenow < 3600000 * i_when ? time_x2 + round(change(time) * pLabel) : time_x21 + round(change(time) * (srLabel == "Levels + Prices" ? (pLabel + 9) : (pLabel + 2))), close, text, xloc.bar_time, yloc.price, #4262ba, label.style_label_left, color.white, size.normal, text.align_left, tooltip_adx_pma_line)
+
+//------------------------------------------------------------------------------
+// Market Sentiment Meter
+
+if addons and isMeter
+    l = 13
+    a = atr(10) / 5
+    f = max(startPrice, endPrice) + dnDev //highest(3 * l) + 5 * a
+    t = time
+    var lns = array.new_line()
+    var c   = array.new_color(na)
+    
+    if barstate.isfirst
+        array.push(c,color.gray)
+        array.push(c,color.red)
+        array.push(c,#910000)
+        array.push(c,color.gray)
+        array.push(c,color.green)
+        array.push(c,#006400)
+    
+    if change(time) and array.size(lns) > 0
+        for i = 1 to array.size(lns)
+            lns1 = array.shift(lns)
+            line.delete(lns1)
+
+    if barstate.islast
+        for i = 0 to l - 1
+            array.push(lns, line.new(t[l + i], f + a * sqrt(pow(l, 2) - pow(i, 2))    , t[l + i + 1], f + a * sqrt(pow(l, 2) - pow(i + 1, 2))    , xloc.bar_time, extend.none, array.get(c, round((i - 2) / 5))        , line.style_solid, 5))
+
+        for i = 1 to array.size(lns) - 1
+            array.push(lns, line.new(t[i + 1], f + a * sqrt(pow(l, 2) - pow(l - i, 2)), t[i]        , f + a * sqrt(pow(l, 2) - pow(l - i + 1, 2)), xloc.bar_time, extend.none, array.get(c, round(3 + (l - i - 2) / 5)), line.style_solid, 5))
+
+        [t1, t2, p2, nc] = if close < bc1
+            min  = s51 != 0 ? s51 : s31 != 0 ? s31 : s21 != 0 ? s21 : s11
+            min2 = s11 != 0 ? s11 : s31
+            if close < min and min != 0
+                [0, 11, -10, #910000]
+            else if close < min2 and min2 != 0
+                [0, 6, -4, color.red]
+            else 
+                [0, 2, -2, color.gray]
+        else if close > tc1
+            max2 = r11 != 0 ? r11 : r31
+            if close > max(r51, r31, r21, r11) and max(r51, r31, r21, r11) != 0
+                [1, -10, -10, #006400]
+            else if close > max2 and max2 != 0
+                [1, -6, -4, color.green]
+            else 
+                [1, -2, -2, color.gray]
+        else
+            [0, 0, -2, color.gray]
+
+        array.push(lns, line.new(t[l + t1], f + a, t[l + t2], f + a * (l + p2), xloc.bar_time, extend.none, nc, line.style_solid      , 3))
+        array.push(lns, line.new(t[l + t1], f + a, t[l + t2], f + a * (l + p2), xloc.bar_time, extend.none, nc, line.style_arrow_right, 1))
+
+//------------------------------------------------------------------------------
+// Price Range Meter / ATR Range Display
+f_atr(_length) => atr(_length)
+atr = security(syminfo.tickerid, htf, f_atr(atrLength))
+
+
+if addons and isRange
+    l = 50
+    a = atr(10) / 5
+    t = time
+    tco = round(change(t))
+    f = min(startPrice, endPrice) - dnDev //timeframe.isweekly or timeframe.ismonthly ? lowest(l) : lowest(3 * l) - 5 * a
+    //------------------------------------------------------------------------------
+    
+    highVolatility  = (htf_h - htf_l) > atr * 1.618
+    atrValue = atr(atrLength)
+    highVolatility0 = (high - low) > atrValue * 1.618
+
+    if barstate.islast
+        oo = round(l * (htf_h - htf_o) / (htf_h - htf_l))
+        co = round(l * (htf_h - close) / (htf_h - htf_l))
+
+        f_drawLineX(t - l * tco , f - a, t           , f - a, xloc.bar_time, extend.none, color.gray                       , line.style_solid, 7)
+        f_drawLineX(t - oo * tco, f - a, t - co * tco, f - a, xloc.bar_time, extend.none, htf_o < close ? #006400 : #910000, line.style_solid, 7)
+
+        f_drawLabelX(t - l * tco, f - a, tostring(htf_l, format.mintick), xloc.bar_time, yloc.price, #00000000, label.style_label_right, color.blue, size.normal, text.align_center, "HTF LOW")
+        f_drawLabelX(t          , f - a, tostring(htf_h, format.mintick), xloc.bar_time, yloc.price, #00000000, label.style_label_left , color.blue, size.normal, text.align_center, "HTF HIGH")
+
+        tooltip = (highVolatility0 ? "⚡" : "") + "Current TF (" + timeframe.period + ")\nATR(" + tostring(atrLength) + ") Value : " + tostring(atrValue, "##") + 
+               "\nPrice Range (H-L) : " + tostring((high - low), format.mintick) + 
+               "\n" + tostring(atrRange) + " x ATR Bands : " + tostring((open - atrRange * atrValue), format.mintick) + " / " + tostring((open + atrRange * atrValue), format.mintick) +
+               "\n\nHigher TF (" + htf + ")\nATR(" + tostring(atrLength) + ") Value : " + tostring(atr, "##") +
+               "\nPrice Range (H-L) : " + tostring((htf_h - htf_l), format.mintick) +
+               "\n" + tostring(atrRange) + " x ATR Bands : " + tostring((htf_o - atrRange * atr), format.mintick) + " / " + tostring((htf_o + atrRange * atr), format.mintick)
+
+
+        text    = (highVolatility0 ? "⚡" : "") + (highVolatility ? "⚡" : "") + "CHANGE (" + htf + ") " + tostring(htf_c - htf_o) + " (" + tostring((htf_c / htf_c1 - 1) * 100, "#.##") + "%)"
+        f_drawLabelX(t - round(l/2) * tco, f - a, text, xloc.bar_time, yloc.price, #00000000                        , label.style_label_down, color.blue, size.normal, text.align_center, tooltip)
+
+        f_drawLabelX(t - co * tco        , f - a, ""          , xloc.bar_time, yloc.price, htf_o < close ? #006400 : #910000, label.style_label_up  , color.blue, size.tiny  , text.align_center, "CURRENT PRICE")
+
+        if not timeframe.ismonthly
+            oo1 = round(l * (htf_h1 - htf_o1) / (htf_h1 - htf_l1))
+            co1 = round(l * (htf_h1 - htf_c1) / (htf_h1 - htf_l1))
+            
+            f_drawLineX(t - l   * tco, f - 7 * a, t            , f - 7 * a, xloc.bar_time, extend.none, color.gray                         , line.style_solid, 5)
+            f_drawLineX(t - oo1 * tco, f - 7 * a, t - co1 * tco, f - 7 * a, xloc.bar_time, extend.none, htf_o1 < htf_c1 ? #006400 : #910000, line.style_solid, 5)
+
+            f_drawLabelX(t - l * tco         , f - 7 * a, tostring(htf_l1, format.mintick)    , xloc.bar_time, yloc.price, #00000000, label.style_label_right, color.blue, size.normal, text.align_center, "PREVIOUS HTF LOW" )
+            f_drawLabelX(t                   , f - 7 * a, tostring(htf_h1, format.mintick)    , xloc.bar_time, yloc.price, #00000000, label.style_label_left , color.blue, size.normal, text.align_center, "PREVIOUS HTF HIGH")
+            f_drawLabelX(t - round(l/2) * tco, f - 7 * a, "PREVIOUS HTF's RANGE (" + htf + ")", xloc.bar_time, yloc.price, #00000000, label.style_label_up   , color.blue, size.normal, text.align_center, "PREVIOUS HTF RANGE (H-L) : " + tostring((htf_h1 - htf_l1), format.mintick))
+
+var table info = table.new(position.top_right   , 1, 1)
+var table logo = table.new(position.bottom_right, 1, 1)
+if barstate.islast
+    table.cell(logo, 0, 0, "☼☾  "                    , text_size = size.normal, text_color = color.teal)
+    table.cell(info, 0, 0, "PVTvX       \n" + display, text_size = size.small , text_color = color.teal)

@@ -1,0 +1,110 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © yunioseijo
+
+//@version=4
+strategy("Cruce de medias", overlay=true, shorttitle = "Cruce Medias")
+// ######################### variables y entradas de datos ###########################
+mm_rapida 				= input(defval=5, title="Media Rapida", 	type=input.integer, minval=2, maxval=15)
+mm_moderada 			= input(defval=15, title="Media moderada", 	type=input.integer, minval=15, maxval=50)
+mm_lenta 				= input(defval=30, title="Media Lenta", 	type=input.integer, minval=50, maxval=450)
+capital_x_operacion 	= input(defval=30, title="Capital por Operacion %", 	type=input.integer, minval=1, maxval=100)
+
+//TP y SL
+take_profit             = input(defval=30.0,         title="Take profit",                   type=input.float, step=0.1)
+stop_loss               = input(defval=15.0,         title="stop loss",                   type=input.float, step=0.1)
+
+//fecha desde no se validan las fechas
+desde_a					=input(2021, 	title="Desde Año")
+desde_m					=input(1, 		title="Desde Mes", minval=1, maxval=12)
+desde_d					=input(1, 		title="Desde Dia", minval=1, maxval=31)
+
+
+//fecha hasta no se validan las fechas
+hasta_a					=input(2030, 	title="Hasta Año")
+hasta_m					=input(1, 		title="Hasta Mes", minval=1, maxval=12)
+hasta_d					=input(1, 		title="Hasta Dia", minval=1, maxval=31)
+
+
+// Variables de la estrategia
+mm_v =sma(close,mm_rapida)
+mm_a =sma(close,mm_moderada)
+mm_r =sma(close,mm_lenta)
+var TP = 0.0
+var SL = 0.0
+var cont_entry = 1
+
+// #########################  procesamiento ###########################
+
+fechaValida() =>
+	desde = time >= timestamp(syminfo.timezone, desde_a, desde_m, desde_d, 0, 0)
+	hasta = time <= timestamp(syminfo.timezone, hasta_a, hasta_m, hasta_d, 0, 0)
+	desde and hasta
+
+alcista = (mm_v > mm_a) and (mm_a > mm_r)
+indecision = (mm_v < mm_a)
+bajista = (mm_v < mm_a) and (mm_a < mm_r)
+
+
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+//logica de la estrategia
+if (not comprado and not vendido and fechaValida())
+    if alcista
+        //cantidad a comprar
+        cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+        //reliazar compra
+        strategy.entry("Compra"+tostring(cont_entry), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_entry))
+        TP := close * (1+(take_profit/100))
+        SL := close * (1-(stop_loss/100))
+    if bajista
+        //cantidad a comprar
+        cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+        //reliazar compra
+        strategy.entry("Venta"+tostring(cont_entry), strategy.short, qty=cantidad, comment="Venta"+tostring(cont_entry))
+        TP := close * (1-(take_profit/200))
+        SL := close * (1+(stop_loss/100))
+
+if comprado
+    //Preguntar por TP
+    if close >=TP
+        strategy.close("Compra"+tostring(cont_entry), comment="TP"+tostring(cont_entry))
+        cont_entry := cont_entry + 1
+        TP := 0
+        SL := 0
+    //preguntar por SL
+    if close <= SL
+        strategy.close("Compra"+tostring(cont_entry), comment="SL"+tostring(cont_entry))
+		cont_entry := cont_entry + 1
+        TP := 0
+        SL := 0
+            
+if (comprado and not fechaValida())
+	strategy.close("Compra", comment="Venta por finalizacion de periodo")
+
+//estoy en vendido
+if vendido
+    if close <= TP
+        strategy.close("Venta"+tostring(cont_entry), comment="TP"+tostring(cont_entry))
+        cont_entry := cont_entry + 1
+        TP := 0
+        SL := 0
+    if close >= SL
+        strategy.close("Venta"+tostring(cont_entry), comment="SL"+tostring(cont_entry))
+		cont_entry := cont_entry + 1
+        TP := 0
+        SL := 0
+            
+	
+
+if(vendido and not fechaValida())
+	strategy.close("Venta", comment="Venta por finalizacion de periodo")
+
+
+// ######################### salida ###########################
+plot(TP > 0 ? TP : na, color=color.green, style=plot.style_circles)
+plot(SL < 0 ? SL : na, color=color.red, style=plot.style_circles)
+bgcolor(alcista ? color.green : na)
+bgcolor(bajista ? color.red : na)
+plot(mm_v, color=color.green)
+plot(mm_a, color=color.yellow)
+plot(mm_r, color=color.red)

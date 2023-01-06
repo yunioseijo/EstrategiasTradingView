@@ -1,0 +1,52 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © RedKTrader
+
+//@version=4
+study("RedK Trader Pressure Index (TPX)", shorttitle="RedK_TPX v3.0", overlay=false, resolution="", precision = 1)
+
+// Inputs
+length   = input(title = "Avg Length",      defval = 7, minval = 1)
+smooth   = input(title = "Smoothing",       defval = 3, minval = 1)
+
+// ****    CLevel is the "critical or control" level, whoever builds pressure that exceeds that level will be in control
+clevel   = input(title = "Control Level",   defval = 30, minval = 5, maxval = 100, step = 5)
+
+// adding optional pre-smoothing - will cause a signal lag of ~1 bar @ value of 3 - will be off by default   
+pre_s    = input(title = "Pre-smoothing?",  defval = false,         inline = "pre-smoothing")
+pre_sv   = input(title = "",                defval = 3, minval = 1, inline = "pre-smoothing")
+
+//Calculations
+//R is the 2-bar range used as "baseline" or denominator 
+R        = highest(2) - lowest(2)
+
+// Bull pressure is represented by how far they can pull the high and the low of previous bar up relative to the 2-bar range
+hiup     = max(change(high),0)
+loup     = max(change(low),0)
+bulls    = min((hiup + loup) / R,1) * 100  //prevent big gaps causing a % over 100%
+avgbull  = wma(nz(bulls), length)
+avgbulls = pre_s ? wma(avgbull, pre_sv) : avgbull
+
+// Bear pressure is represented by how far they can push the high and the low of previous bar down relative to the 2-bar range
+hidn     = min(change(high),0)
+lodn     = min(change(low),0) 
+bears    = max((hidn + lodn) / R,-1) * -100     //convert to positive value
+avgbear  = wma(nz(bears), length)
+avgbears = pre_s ? wma(avgbear, pre_sv) : avgbear
+
+net      = avgbulls - avgbears
+TPX      = wma(net, smooth)                 // final smoothing
+
+//colors & plots
+col_bulls = #33ff0099   // 40% transp
+col_bears = #ff111166   // 60% transp
+col_level = #ffee00    
+col_TPXup = color.white , col_TPXdn = color.gray
+TPXBullish= TPX > 0
+
+hline(  0,                                 color = col_level, linestyle = hline.style_solid,    linewidth = 1, editable = false)
+hline(clevel,  title = "Control Level",    color = col_level, linestyle = hline.style_dotted,   linewidth = 2)
+
+plot(avgbulls, title = "Bull Pressure",    color = col_bulls,  style=plot.style_area,           linewidth = 3)
+plot(avgbears, title = "Bear Pressure",    color = col_bears,  style=plot.style_area,           linewidth = 3)
+plot(TPX,      title = "Net Pressure",     color = TPXBullish ? col_TPXup : col_TPXdn,          linewidth = 3)
+

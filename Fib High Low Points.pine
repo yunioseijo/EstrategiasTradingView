@@ -1,0 +1,52 @@
+// © hiimannshu
+//@version=4
+
+// This is a simple indicator which plot high and lows based on Fibonacci sequence. 
+// Best part of this indicator is it don't rewrite itself once it got plotted on the chart, which make it unique from other High low indicators.
+
+study("Fib High Low Points", "Fib HL", overlay=true)
+
+
+h_left_min          =      input(title="Count candle Min", type=input.integer, defval=15)
+h_left              =      input(title="Count candle Max", type=input.integer, defval=30)
+ 
+
+h_left_low_min      =      lowest(h_left_min)
+h_left_low          =      lowest(h_left)
+
+h_left_high_min     =      highest(h_left_min)
+h_left_high         =      highest(h_left)
+
+newlow_min          =      low <= h_left_low_min
+newlow              =      low <= h_left_low
+
+newhigh_min         =      high >= h_left_high_min
+newhigh             =      high >= h_left_high
+
+central_bar_low_min =      low[h_left_min]
+central_bar_low     =      low[h_left]
+
+central_bar_high_min =     high[h_left_min]
+central_bar_high     =     high[h_left]
+
+
+full_zone_low_min   =      lowest(h_left_min * 2)
+full_zone_low       =      lowest(h_left * 2)
+
+full_zone_high_min  =      highest(h_left_min * 2)
+full_zone_high      =      highest(h_left * 2)
+
+
+highest_bar_min     =      central_bar_high_min >= full_zone_high_min
+highest_bar         =      central_bar_high >= full_zone_high
+
+lowest_bar_min      =      central_bar_low_min <= full_zone_low_min
+lowest_bar          =      central_bar_low <= full_zone_low
+
+plotshape(highest_bar_min ? -1 : 0, offset=-h_left_min, style=shape.circle, location=location.abovebar, color=color.new(color.purple,0), size=size.tiny)
+plotshape(lowest_bar_min ? 1 : 0, offset=-h_left_min, style=shape.circle, location=location.belowbar, color=color.new(color.purple,0), size=size.tiny)
+
+
+plotshape(highest_bar ? -1 : 0, offset=-h_left, style=shape.circle, location=location.abovebar, color=color.new(color.blue,0), size=size.tiny)
+plotshape(lowest_bar ? 1 : 0, offset=-h_left, style=shape.circle, location=location.belowbar, color=color.new(color.blue,0), size=size.tiny)
+

@@ -1,0 +1,479 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © adrianmprusia
+
+//@version=4
+strategy("MACD y BB Adrian", shorttitle="MACD and BB", overlay=true)
+
+// Timeframe {
+backtest_timeframe_start = input(defval = timestamp("01 Jan 2008 00:00 +0000"), title = "Backtest Start Time", type = input.time)
+USE_ENDTIME = input(false,title="Define backtest end-time (If false, will test up to most recent candle)")
+backtest_timeframe_end = input(defval = timestamp("01 Jan 2021 00:00 +0000"), title = "Backtest End Time (if checked above)", type = input.time)
+within_timeframe = time >= backtest_timeframe_start and (time <= backtest_timeframe_end or not USE_ENDTIME)
+// }
+
+// ######################### variables y entradas de datos ########################### //
+capital_x_operacion = input(defval=100, 	        title="Capital por Operacion %",    type=input.integer, minval=1, maxval=100)
+
+ia                  = input(defval=false, title="Parametros de la IA", type=input.bool)
+long_or_short       = input(defval="Long",   title="Seleccionar tendencia",  options=["Long and Short", "Long", "Short"])
+estrategia          = input(defval="MACD and BB",   title="Estrategia",  options=["MACD and BB", "MACD", "RSS WMA and BB", "RSS WMA", "BB Central", "BB Opuesta"])
+//margen              = input(defval=25.0, title="Margen", type=input.float, minval=0, maxval=100, step=0.1)
+lateral		        = input(defval=0.0, title="Lateralidad", type=input.float, minval=0, maxval=100, step=1, tooltip="Distancia de la media movil a la banda superior e inferior (se expresa en %) [Se usa para la lateralidad]")
+
+TP_and_SL           = input(defval=false, title="Take profit and stop lost", type=input.bool, group ="TP and SL", tooltip="Agregar a la estrategia toma de ganancias y o condicion de parada (se expresa en %)")
+take_profit         = input(defval=0.0, title="Take profit", type=input.float, minval=0, step=0.1, group="TP and SL", tooltip="Si Take profit es 0 solo se usa el stop lost o un stop dinamico para asegurar ganancias")
+stop_din            = input(defval=false, title="Stop dinámico", type=input.bool, group ="TP and SL", tooltip="Desea un stop de seguimiento o stop lost")
+stop_lost           = input(defval=5.0, title="Stop lost", type=input.float, minval=0, maxval=100, step=0.1, group="TP and SL")
+
+ema_src = input(close, title="Source", group="EMA")
+ema_len = input(9, minval=1, title="Length", group="EMA")
+ema_offset = input(title="Offset", type=input.integer, defval=0, minval=-500, maxval=500, group="EMA")
+
+rss_price       = input(title = "Source",                 type = input.source,  defval = close, group ="RSS WMA")
+rss_alpha       = input(title = "Combined Smoothness",    type = input.integer, defval = 15, minval = 1, group ="RSS WMA")
+
+macd_fl             = input(title="Fast Length", type=input.integer, defval=12, group ="MACD")
+macd_sl             = input(title="Slow Length", type=input.integer, defval=26, group ="MACD")
+macd_src            = input(title="Source", type=input.source, defval=close, group ="MACD")
+macd_rl             = input(title="Signal Smoothing", type=input.integer, minval = 1, maxval = 50, defval = 9, group ="MACD")
+sma_source          = input(title="Simple MA (Oscillator)", type=input.bool, defval=false, group ="MACD")
+sma_signal          = input(title="Simple MA (Signal Line)", type=input.bool, defval=false, group ="MACD")
+
+bb_length           = input(20, minval=1, group ="BB")
+bb_src              = input(close, title="BB Source", group="BB")
+bb_mult             = input(1.5, minval=0.001, maxval=50, title="BB StdDev", group="BB")
+offset              = input(0, "BB Offset", type = input.integer, minval = -500, maxval = 500, group="BB")
+
+//a_favor_tendencia       = input(defval=false,        title="Ir a favor de la tendencia", type=input.bool)
+
+tolerancia_super		= input(defval=2.0,         title="Tolerancia Superior", 		type=input.float)
+tolerancia_infer		= input(defval=0.5,         title="Tolerancia Inferior", 		type=input.float)
+
+//funciones
+//====================================
+f_LazyLine(_data, _length) =>
+    w1 = 0, w2 = 0, w3 = 0
+    L1 = 0.0, L2 = 0.0, L3 = 0.0
+    w = _length / 3
+    
+    if _length > 2 
+        w2 := round(w)
+        w1 := round((_length-w2)/2)
+        w3 :=   int((_length-w2)/2)
+        
+        L1 := wma(_data, w1)
+        L2 := wma(L1, w2)
+        L3 := wma(L2, w3)
+    else
+        L3 := _data
+    L3
+//====================================
+entre(valor, inferior, superior) =>
+    valor >= inferior and valor <= superior 
+//====================================
+
+// Plot colors
+col_grow_above = #26A69A
+col_grow_below = #FFCDD2
+col_fall_above = #B2DFDB
+col_fall_below = #EF5350
+col_macd = #0094ff
+col_signal = #ff6a00
+
+// Calculating MACD
+macd_fma = sma_source ? sma(macd_src, macd_fl) : ema(macd_src, macd_fl)
+macd_sma = sma_source ? sma(macd_src, macd_sl) : ema(macd_src, macd_sl)
+macd = macd_fma - macd_sma
+
+macd_signal = sma_signal ? sma(macd, macd_rl) : ema(macd, macd_rl)
+macd_hist = macd - macd_signal
+
+//RSS WMA
+LL = f_LazyLine(rss_price, rss_alpha)
+c_up        = color.new(#33ff00, 0)
+c_dn        = color.new(#ff1111, 0)
+uptrend     = LL > LL[1]
+
+//MACD
+var alcista = false
+alcista := macd > macd_signal ? true : false
+
+//Calculo de la media movil de BB y las bandas superior e inferior
+[basis, bb_superior, bb_inferior] = bb(bb_src, bb_length, bb_mult)
+
+//BB
+var inferior = false
+var rebote_up = false
+var rebote_down = false
+var superior = false
+if low < bb_inferior
+    inferior := true
+    rebote_up   := false
+    rebote_down := false
+    superior := false
+if inferior and close > basis
+    rebote_up := true
+    inferior := false
+    rebote_down := false
+    superior := false
+if rebote_up and close < basis
+    rebote_down := true
+    rebote_up := false
+    superior := false
+    inferior := false
+if high > bb_superior
+    superior := true
+    rebote_up := false
+    rebote_down := false
+    inferior := false
+if superior and close < basis
+    rebote_down := true
+    superior := false
+    rebote_up := false
+    inferior := false
+if rebote_down and close > basis
+    rebote_up := true
+    rebote_down := false
+    superior := false
+    inferior := false
+
+//EMA
+//var dist = 0.0
+ema_par = ema(ema_src, ema_len)
+ema_D50 = ema(close, 50)
+ema_D200 = ema(close, 200)
+if timeframe.isminutes and timeframe.multiplier < 60
+    ema_D50 := ema(close, 240/timeframe.multiplier*50)
+    ema_D200 := ema(close, 240/timeframe.multiplier*200)
+
+if timeframe.isminutes and timeframe.multiplier >= 60
+    ema_D50 := ema(close, 1440/timeframe.multiplier*50)
+    ema_D200 := ema(close, 1440/timeframe.multiplier*200)
+
+if ia
+    if ema_D50 > close and ema_D200 > close
+        long_or_short := "Short"
+    else if (ema_D50 > close and ema_D200 < close) or (ema_D50 < close and ema_D200 > close)
+        long_or_short := "Long and Short"
+    else
+        long_or_short := "Long"
+
+// Variables de la estrategia
+var TP_L = 0.0
+var TP_S = 0.0
+var TP_Long = 0.0
+var TP_Short = 0.0
+var SL_Long = 0.0
+var SL_Short = 0.0
+var max_high = 0.0
+var min_low = 0.0
+var cont_buy = 1
+var cont_sell = 1
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+
+//logica de la estrategia
+if long_or_short == "Long and Short"
+    if (within_timeframe and not comprado and (lateral <= (1-basis/bb_superior)*100))
+        if estrategia == "MACD and BB" or estrategia == "MACD"
+            if (rebote_up and alcista) or (superior and alcista)
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+			    //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+		        strategy.entry("Compra"+tostring(cont_buy), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_buy))
+		        TP_L := close
+		        if TP_and_SL
+                    TP_Long := close * (1+(take_profit/100))
+		            SL_Long := close * (1-(stop_lost/100))
+		            max_high := close
+                alert("Compra"+tostring(cont_buy), alert.freq_all)
+        else if estrategia == "RSS WMA and BB" or estrategia == "RSS WMA"
+            if (rebote_up and uptrend) or (superior and uptrend)
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+			    //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+		        strategy.entry("Compra"+tostring(cont_buy), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_buy))
+		        TP_L := close
+		        if TP_and_SL
+                    TP_Long := close * (1+(take_profit/100))
+		            SL_Long := close * (1-(stop_lost/100))
+		            max_high := close
+                alert("Compra"+tostring(cont_buy), alert.freq_all)
+    if (within_timeframe and not vendido and (lateral <= (1-bb_inferior/basis)*100))
+        if estrategia == "MACD and BB" or estrategia == "MACD"
+            if (rebote_down and not alcista) or (inferior and not alcista)
+                //si esta por debajo de la banda inferior el cierre entra en Short
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+	            //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+	            strategy.entry("Venta"+tostring(cont_sell), strategy.short, qty=cantidad, comment="Venta"+tostring(cont_sell))
+                TP_S := close 
+                if TP_and_SL
+    	            TP_Short := close * (1-(take_profit/100))
+                    SL_Short := close * (1+(stop_lost/100))
+                    min_low := close
+                alert("Venta"+tostring(cont_buy), alert.freq_all)
+        else if estrategia == "RSS WMA and BB" or estrategia == "RSS WMA"
+            if (rebote_down and not uptrend) or (inferior and not uptrend)
+                //si esta por debajo de la banda inferior el cierre entra en Short
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+	            //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+	            strategy.entry("Venta"+tostring(cont_sell), strategy.short, qty=cantidad, comment="Venta"+tostring(cont_sell))
+                TP_S := close 
+                if TP_and_SL
+    	            TP_Short := close * (1-(take_profit/100))
+                    SL_Short := close * (1+(stop_lost/100))
+                    min_low := close
+                alert("Venta"+tostring(cont_buy), alert.freq_all)
+        
+else if long_or_short == "Long"
+    if (within_timeframe and not comprado and (lateral <= (1-basis/bb_superior)*100))
+        if estrategia == "MACD and BB" or estrategia == "MACD"
+            if (rebote_up and alcista) or (superior and alcista)
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+			    //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+		        strategy.entry("Compra"+tostring(cont_buy), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_buy))
+		        TP_L := close
+		        if TP_and_SL
+                    TP_Long := close * (1+(take_profit/100))
+		            SL_Long := close * (1-(stop_lost/100))
+		            max_high := close
+                alert("Compra"+tostring(cont_buy), alert.freq_all)
+        else if estrategia == "RSS WMA and BB" or estrategia == "RSS WMA"
+            if (rebote_up and uptrend) or (superior and uptrend)
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+			    //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+		        strategy.entry("Compra"+tostring(cont_buy), strategy.long, qty=cantidad, comment="Compra"+tostring(cont_buy))
+		        TP_L := close
+		        if TP_and_SL
+                    TP_Long := close * (1+(take_profit/100))
+		            SL_Long := close * (1-(stop_lost/100))
+		            max_high := close
+                alert("Compra"+tostring(cont_buy), alert.freq_all)
+else
+    if (within_timeframe and not vendido and (lateral <= (1-bb_inferior/basis)*100))
+	    if estrategia == "MACD and BB" or estrategia == "MACD"
+            if (rebote_down and not alcista) or (inferior and not alcista)
+                //si esta por debajo de la banda inferior el cierre entra en Short
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+	            //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+	            strategy.entry("Venta"+tostring(cont_sell), strategy.short, qty=cantidad, comment="Venta"+tostring(cont_sell))
+                TP_S := close 
+                if TP_and_SL
+    	            TP_Short := close * (1-(take_profit/100))
+                    SL_Short := close * (1+(stop_lost/100))
+                    min_low := close
+                alert("Venta"+tostring(cont_buy), alert.freq_all)
+        else if estrategia == "RSS WMA and BB" or estrategia == "RSS WMA"
+            if (rebote_down and not uptrend) or (inferior and not uptrend)
+                //si esta por debajo de la banda inferior el cierre entra en Short
+                cantidad = round(strategy.equity / close) * capital_x_operacion / 100
+	            //cantidad de activos = cantidad de dinero disponible entre el cierre x el % de capital
+	            strategy.entry("Venta"+tostring(cont_sell), strategy.short, qty=cantidad, comment="Venta"+tostring(cont_sell))
+                TP_S := close 
+                if TP_and_SL
+    	            TP_Short := close * (1-(take_profit/100))
+                    SL_Short := close * (1+(stop_lost/100))
+                    min_low := close
+                alert("Venta"+tostring(cont_buy), alert.freq_all)
+
+//verificar TP_L y SC_L
+if comprado
+    if TP_and_SL
+        if take_profit > 0 and close > TP_Long
+            strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+            alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            cont_buy += 1
+        if close < SL_Long
+            if stop_din
+                if close > TP_Long
+                    strategy.close("Compra"+tostring(cont_buy), comment="TP_LongDin"+tostring(cont_buy))
+                    alert("Compra "+tostring(cont_buy)+" TP_LongDin", alert.freq_all)
+                    cont_buy += 1
+                else
+                    strategy.close("Compra"+tostring(cont_buy), comment="SL_LongDin"+tostring(cont_buy))
+                    alert("Compra "+tostring(cont_buy)+" SL_LongDin", alert.freq_all)
+                    cont_buy += 1
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SL_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SL_Long", alert.freq_all)
+                cont_buy += 1
+        if stop_din and max_high < high
+            SL_Long := high * (1-(stop_lost/100))
+            max_high := high
+    if estrategia == "RSS WMA and BB"
+        if (rebote_down and not uptrend) or inferior
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+    else if estrategia == "MACD and BB"
+        if (rebote_down and not alcista) or inferior
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+    else if estrategia == "RSS WMA"
+        if not uptrend
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+    else if estrategia == "MACD"
+        if not alcista
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+    else if estrategia == "BB Central"
+        if close < basis
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+    else
+        if close < bb_superior
+            if close > TP_L
+                strategy.close("Compra"+tostring(cont_buy), comment="TP_Long"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" TP_Long", alert.freq_all)
+            else
+                strategy.close("Compra"+tostring(cont_buy), comment="SC_L"+tostring(cont_buy))
+                alert("Compra "+tostring(cont_buy)+" SC_L", alert.freq_all)
+            cont_buy += 1
+
+//verificar TP_S y SC_S
+if vendido
+    if TP_and_SL
+        if take_profit > 0 and close < TP_Short
+            strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+            alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            cont_sell +=1
+        if close > SL_Short
+            if stop_din
+                if close < TP_Short
+                    strategy.close("Venta"+tostring(cont_sell), comment="TP_ShortDin"+tostring(cont_sell))
+                    alert("Venta "+tostring(cont_sell)+" TP_ShortDin", alert.freq_all)
+                    cont_sell +=1
+                else
+                    strategy.close("Venta"+tostring(cont_sell), comment="SL_ShortDin"+tostring(cont_sell))
+                    alert("Venta "+tostring(cont_sell)+" SL_ShortDin", alert.freq_all)
+                    cont_sell +=1
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SL_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SL_Short", alert.freq_all)
+                cont_sell +=1
+        if stop_din and min_low > low
+            SL_Short := low * (1+(stop_lost/100))
+            min_low := low
+    if estrategia == "RSS WMA and BB"
+        if (rebote_up and uptrend) or superior
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+    else if estrategia == "RSS WMA"
+        if uptrend
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+    if estrategia == "MACD and BB"
+        if (rebote_up and alcista) or superior
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+    else if estrategia == "MACD"
+        if alcista
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+    else if estrategia == "BB Central"
+        if close >= basis
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+    else
+        if close >= bb_inferior
+            if close < TP_S
+                strategy.close("Venta"+tostring(cont_sell), comment="TP_Short"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" TP_Short", alert.freq_all)
+            else
+                strategy.close("Venta"+tostring(cont_sell), comment="SC_S"+tostring(cont_sell))
+                alert("Venta "+tostring(cont_sell)+" SC_S", alert.freq_all)
+            cont_sell +=1
+
+if( not within_timeframe)
+    strategy.close_all(comment="Venta por finalizacion de periodo")
+
+//distancia = bb_superior - bb_inferior
+//pintar_superior = distancia > tolerancia_super
+//pintar_inferior = distancia < tolerancia_infer
+
+//alcista_strategy = high > bb_superior and entre(distancia, tolerancia_infer, tolerancia_super)
+//bajista_strategy = close < bb_inferior and entre(distancia, tolerancia_infer, tolerancia_super)
+
+
+//bgcolor(alcista_strategy ? color.green : na , transp=0)
+//bgcolor(bajista_strategy ? color.red : na , transp=0)
+//fill(ts,d ,color =( pintar_superior ? color.red : na))
+//fill(ti,d ,color =( pintar_inferior ? color.red : na))
+//plot(TP_L > 0 ? TP_L : na, color=color.green, style=plot.style_circles)
+//plot(TP_L, color=color.green, style=plot.style_circles)
+//fill( plot(bb_superior) , plot(bb_inferior), color=color.aqua)
+
+//Graficando el MACD
+//bgcolor(alcista ? color.green : color.red)
+//plot(macd_hist, title="MACD Histogram", style=plot.style_columns, color=(macd_hist>=0 ? (macd_hist[1] < macd_hist ? col_grow_above : col_fall_above) : (macd_hist[1] < macd_hist ? col_grow_below : col_fall_below) ), transp=0 )
+//plot(macd, title="MACD Main Line", color=col_macd, linewidth=2, transp=0)
+//plot(macd_signal, title="MACD Signal Line", color=col_signal, linewidth=1, transp=0)
+
+//Graficando las BB (Debo cambiar overlay=true arriba)
+bgcolor(inferior ? color.red : na)
+bgcolor(rebote_up ? color.green : na)
+bgcolor(superior ? color.blue : na)
+bgcolor(rebote_down ? color.orange : na)
+
+plot(basis, "Basis", color=#872323, offset = offset)
+p1 = plot(bb_superior, "Upper", color=color.teal, offset = offset)
+p2 = plot(bb_inferior, "Lower", color=color.teal, offset = offset)
+fill(p1, p2, title = "Background", color=color.aqua)
+
+//Graficando EMA
+//out = ema(src, len)
+plot(ema_D200, title="EMA 200", color=color.purple, offset=ema_offset, linewidth=2)
+plot(ema_D50, title="EMA 50", color=color.black, offset=ema_offset, linewidth=2)
+//plot(ema(close, 200), title="EMA 200", color=color.yellow, offset=0, linewidth=2)
+
+//Graficando RSS WMA
+plot(LL,                "SS_WMA Line",  color = uptrend ? c_up : c_dn,  linewidth=3)
+plot(wma(rss_price, rss_alpha), "WMA",          color = color.purple,           display=0)

@@ -1,0 +1,55 @@
+//@version=4
+study("QFL single TF v1.2", shorttitle="QFL single TF v1.2", overlay=true)
+f_secureSecurity(_symbol, _res, _src) => security(_symbol, _res, _src[1], lookahead = barmerge.lookahead_on)
+
+tf = input(title="QFL timeframe", type=input.resolution, defval= "current", tooltip="Do not select a timeframe below the current timeframe (example: if the chart is in 15m do no select 5m in this option, you can select 30m or higher TFs).")
+vamp = input(title="QFL volume MA", type=input.integer, defval=6)
+percentage = input(3.5, title="QFL percentage to buy", tooltip="When the price falls below the current base this percentage a buy signal will be triggered.")
+percentageSell = input(3.5, title="QFL percentage to sell", tooltip="When the price goes above the current base this percentage a sell signal will be triggered.")
+maxbaseage = input(0, "Max candle age", tooltip="It won't open a deal if the price is below a base that has lived for longer than X candles. Use 0 to disable this condition.")
+backtestingCompatible = input(false,"Backtesting compatible",tooltip="Enable this to plot 1 for buys so you can use this indicator with the backtest script.")
+plotSignal = input(true, "plot signal")
+plotLevels = input(true, "plot bases")
+allowConsecutiveSignals = input(false,"Allow consecutive signals", tooltip="If the conditions are met in to consecutive candles, allow both to trigger the signal and not only the first candle.")
+
+
+// QFL magic
+vam = sma(volume, vamp)
+up = high[3]>high[4] and high[4]>high[5] and high[2]<high[3] and high[1]<high[2] and volume[3]>vam[3]
+down = low[3]<low[4] and low[4]<low[5] and low[2]>low[3] and low[1]>low[2] and volume[3]>vam[3]
+
+// we need to use functions so we don't upset security. In pine 4 you can only pass unmutable values to security!
+fractaldownF() => 
+    fd = 0.0
+    fd := down ? low[3] : nz(fd[1])
+    
+fractalupF() => 
+    fu = 0.0
+    fu := up ? high[3] : nz(fu[1])
+
+fuptf = f_secureSecurity(syminfo.tickerid,tf == "current" ? timeframe.period : tf, fractalupF())
+fdowntf = f_secureSecurity(syminfo.tickerid,tf == "current" ? timeframe.period : tf, fractaldownF())
+
+plot(fuptf, "FractalUp", color=color.new(color.lime, plotLevels ? 0 : 100), linewidth=1, style=plot.style_cross, offset =-3, join=false)
+plot(fdowntf, "FractalDown", color=color.new(color.red, plotLevels ? 0 : 100), linewidth=1, style=plot.style_cross, offset=-3, join=false)
+
+// bars since 
+age = barssince(fuptf != fuptf[1])
+agecond = maxbaseage == 0 or age < maxbaseage 
+
+buy = 100*(close/fdowntf) < 100 - percentage and agecond
+sell = 100*(close/fuptf) > 100 + percentageSell and agecond
+
+
+signal = buy and (allowConsecutiveSignals or not buy[1] or fdowntf != fdowntf[1])
+sellSignal = sell and (allowConsecutiveSignals or not sell[1] or fuptf != fuptf[1])
+
+plotshape(signal and plotSignal, title="B", text="B", location=location.belowbar, style=shape.labelup, size=size.tiny, color=color.blue, textcolor=color.white)
+plotshape(sellSignal and plotSignal, title="S", text="S", location=location.abovebar, style=shape.labeldown, size=size.tiny, color=color.red, textcolor=color.white)
+
+// Let's plot 1 for Buy signal so it's compatible with the backtest script
+plot(backtestingCompatible and signal ? 1: backtestingCompatible and sellSignal ? 2 : 0 , "QFL signal")
+
+alertcondition(signal, 'QFL Buy', 'QFL Buy')
+alertcondition(sellSignal, 'QFL Sell', 'QFL Sell')
+

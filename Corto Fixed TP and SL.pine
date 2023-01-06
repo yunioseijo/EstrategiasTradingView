@@ -1,0 +1,218 @@
+// © theCrypster 2020
+
+//@version=4
+strategy("Corto Fixed Stop Loss & Take Profit %", overlay=true, shorttitle = "Corto Fixed TP and SL")
+
+venta_por_sobre_compra      = input(defval=false, title="Vender por sobre Compra", group="Vender por sobre compra")
+sobre_compra_m2 		    = input(defval=15, title="Limite de sobre Compra media 2", 	type=input.integer, group="Vender por sobre compra")
+sobre_compra_m3 		    = input(defval=30, title="Limite de sobre Compra media 3", 	type=input.integer, group="Vender por sobre compra")
+negativo                    = input(defval=true, title="Despues de un dia bajista", group="Vender por sobre compra")
+//TP y SL
+take_profit_b1            = input(defval=15.0,         title="Take profit",                   type=input.float, step=1, group="Vender por sobre compra")  / 100
+stop_loss_b1               = input(defval=10.0,         title="stop loss",                   type=input.float, step=1, group="Vender por sobre compra") / 100
+
+venta_tendencia_bajista     = input(defval=false, title="Vender en tendencia", group="Vender por tendencia bajista")
+sobre_venta_m2 		        = input(defval=-3, title="Limite de sobre Compra media 2", 	type=input.integer, group="Vender por tendencia bajista")
+limite_variacion	        = input(defval=7, title="Limite de Variacion ne la vela de entrada", group="Vender por tendencia bajista")
+sobre_venta_m3 		        = input(defval=-20, title="Limite de sobre Compra media 3", 	type=input.integer, group="Vender por tendencia bajista")
+//TP y SL
+take_profit_b2            = input(defval=15.0,         title="Take profit",                   type=input.float, step=1,  group="Vender por tendencia bajista")  / 100
+stop_loss_b2               = input(defval=10.0,         title="stop loss",                   type=input.float, step=1,  group="Vender por tendencia bajista") / 100
+
+salvar_profit_bool_porcent       = input(defval = false, title="Proteger profit cuando alcance %", inline = "2", group="Proteger profit")
+salvar_profit_porcent   = input(defval =15.0, title="Target Profit", inline = "2", group="Proteger profit")
+mover_stop_profit_porcent        = input(defval=1, title="Mover el stop a...",inline = "2", group="Proteger profit")
+
+// parametros media moviles
+mm_rapida 				= input(defval=5,       title="Media Rapida", 	            type=input.integer, minval=2, maxval=150,  group="Parametros de medias moviles")
+mm_moderada 			= input(defval=15,      title="Media moderada",             type=input.integer, minval=2, maxval=300,  group="Parametros de medias moviles")
+mm_lenta 				= input(defval=30,      title="Media Lenta", 	            type=input.integer, minval=5, maxval=500,  group="Parametros de medias moviles")
+
+// Parametros del macd
+macd_fl = input(title="Linea Rapida", type=input.integer, defval=12,  group="Parametros del MACD")
+macd_sl = input(title="Linea Lenta", type=input.integer, defval=26,  group="Parametros del MACD")
+macd_src = input(title="Fuente", type=input.source, defval=close,  group="Parametros del MACD")
+macd_rl = input(title="Señal", type=input.integer, minval = 1, maxval = 50, defval = 9,  group="Parametros del MACD")
+
+
+//parametros de la pendiente
+lookback1 = input(defval=1, title="Lookback 1",  group="Parametros de la pendiente")
+media_per_pend = input(defval=3, title="MA Length",  group="Parametros de la pendiente")
+fuente = input(defval="EMA", title="1st MA Type", options=["SMA", "EMA", "HMA", "VWMA", "LSMA"],  group="Parametros de la pendiente") 
+
+
+//cerrar_posicion_dias    = input(defval = true,   title = "Cerrar posicion por dias")
+//dias_p_cerrar 			= input(defval=10,       title="Cerrar la operacion por cantidad de dias", 	    type=input.integer, minval=2,   maxval=150, group="comprar por ganga")
+// Timeframe {
+backtest_timeframe_start    = input(defval = timestamp("01 Jan 1900 00:00 +0000"), title = "Periodo de inicio", type = input.time)
+USE_ENDTIME                 = input(defval = false, title="Solo en la fecha  (Falso, usa todo el tiempo disponible)")
+backtest_timeframe_end      = input(defval = timestamp("01 Jan 2031 00:00 +0000"), title = "Fin", type = input.time)
+within_timeframe = time >= backtest_timeframe_start and (time <= backtest_timeframe_end or not USE_ENDTIME)
+// }
+
+//limite 				    = input(defval=8, title="Limite de Variacion", 	type=input.integer, minval=3, maxval=60)
+//limite_consolidacion    = input(defval=3, title="Limite de consolidacion", 	type=input.integer, minval=3, maxval=60)
+
+capital_x_operacion 	= input(defval=100, title="Capital por Operacion %", 	type=input.integer, minval=1, maxval=100)
+
+
+
+
+
+// Variables de la estrategia
+mm_v =ema(open,mm_rapida)
+mm_a =ema(open,mm_moderada)
+mm_r =ema(open,mm_lenta)
+var TP = 0.0
+var SL = 0.0
+var PE = 0.0
+var cont_entry = 1
+var perdi_por_cambio = 0
+var racha_perdidas = 0
+var dias_comprados = 0.00
+var gananc_con_camb_tend = 0
+var vender = false
+var vendido_por_sobre_compra = false
+var vendido_por_t_bajista = false
+var vendido_por_vela_bajista = false
+var bajista_1 = false
+var bajista_2 = false
+var bajista_tendencia = false
+var bajista_ema_porcentaje =false
+
+// #########################  procesamiento ###########################
+variacion_porciento = abs(high-low) * 100 /open
+gran_vela_alc = variacion_porciento > limite_variacion and open < close
+gran_vela_baj = variacion_porciento > limite_variacion and open > close
+porcentaje2 = close*100/ ema(open,mm_moderada)-100
+porcentaje3 = close*100/ ema(open,mm_lenta)-100
+ema_porcentaje = ema(porcentaje3,30)
+
+//funcion para saber si macd es alcista
+macd_isAlcista(_macd, _macd_signal) => _macd > _macd_signal ? true : false
+// Calcula MACD
+macd_fma = ema(macd_src, macd_fl)
+macd_sma =  ema(macd_src, macd_sl)
+macd = macd_fma - macd_sma
+macd_signal =ema(macd, macd_rl)
+macd_hist = macd - macd_signal
+alcista_macd = macd_isAlcista(macd, macd_signal)
+
+// #################### Inicio Calculo de la pendiente #################
+f_hma(_src, _length)=>
+    _return = wma((2*wma(_src, _length/2))-wma(_src, _length), round(sqrt(_length)))
+price = close
+price1 = if (fuente == "SMA")
+    sma(price, media_per_pend)
+else
+    if (fuente == "EMA")
+        ema(price, media_per_pend)
+    else
+        if (fuente == "VWMA")
+            vwma(price, media_per_pend)
+        else
+            if (fuente == "LSMA")
+                linreg(price, media_per_pend, 0)
+            else
+                f_hma(price, media_per_pend)
+    
+
+roc1 = roc(price1, lookback1) * 63.92
+
+pendiente_alcista = roc1 >= -2
+
+// #################### FIN Calculo de la pendiente #################
+
+vendido = strategy.position_size < 0
+
+media_porcentaje = sma(variacion_porciento,10)
+//consolida = variacion_porciento < limite_consolidacion
+//consolida = variacion_porciento < media_porcentaje
+//gran_vela_alc := variacion_porciento > limite and open < close
+//gran_vela_baj := variacion_porciento > limite and open > close
+
+//fill(currentLine,profitLine, title = "Profit Background" ,color = not comprado_x_ganga ? color.new(color.green,75) : color.new(color.blue,75))
+bajista_1 := negativo ? porcentaje3 > sobre_compra_m3 and porcentaje2 > sobre_compra_m2 and close < open : porcentaje3 > sobre_compra_m3 and porcentaje2 > sobre_compra_m2
+bajista_2 := (mm_a < mm_r) and porcentaje2 <= sobre_venta_m2 and porcentaje3 >= sobre_venta_m3 and not alcista_macd
+bajista_ema_porcentaje := porcentaje3 < ema_porcentaje
+bajista_tendencia := mm_a <= mm_r and bajista_ema_porcentaje and not pendiente_alcista and not gran_vela_baj and porcentaje3 > sobre_venta_m3 and not alcista_macd
+
+cerrar_por_camb_tend = false //crossover(mm_v, mm_a)
+cantidad = abs(round(strategy.equity / close) * capital_x_operacion / 100)
+barra_5min = security(syminfo.tickerid, "20", close)
+
+if venta_por_sobre_compra and bajista_1
+    //reliazar entrada en corto
+    strategy.entry("Corto por sobre compra", strategy.short, qty=cantidad, when=bajista_1)
+    vendido_por_sobre_compra := true
+    PE := strategy.position_avg_price
+    TP := PE * (1 - take_profit_b1)
+    SL := PE *(1 + stop_loss_b1)
+
+            
+if venta_tendencia_bajista and bajista_tendencia
+    strategy.entry("Corto por tendencia bajista", strategy.short, qty=cantidad, when=bajista_tendencia)
+    vendido_por_t_bajista := true
+    dias_comprados := bar_index
+    PE := strategy.position_avg_price
+    TP := PE * (1 - take_profit_b2)
+    SL := PE *(1 + stop_loss_b2)
+
+if gran_vela_baj and close >= mm_a
+    strategy.entry("Corto por vela bajista", strategy.short, qty=cantidad, when=gran_vela_baj)
+    vendido_por_vela_bajista := true
+    dias_comprados := bar_index
+    PE := strategy.position_avg_price
+    TP := PE * (1 - take_profit_b2)
+    SL := PE *(1 + stop_loss_b2)
+
+
+
+// Determine where you've entered and in what direction
+shortStop_b1 = strategy.position_avg_price * (1 + stop_loss_b1)
+shortTake_b1 = strategy.position_avg_price * (1 - take_profit_b1)
+
+shortStop_b2 = strategy.position_avg_price * (1 + stop_loss_b2)
+shortTake_b2 = strategy.position_avg_price * (1 - take_profit_b2)
+var tomar_ganancia = false
+var profit = false
+// cierre en tendencia bajista
+if barra_5min <= shortTake_b2
+    tomar_ganancia :=true
+    strategy.close("Corto por tendencia bajista", comment="TP"+tostring(cont_entry))
+    vendido_por_t_bajista := false
+    
+if barra_5min >= shortStop_b2
+    strategy.close("Corto por tendencia bajista", comment="SL"+tostring(cont_entry))
+    vendido_por_t_bajista := false
+
+profit := PE > 0 and PE * (1-(salvar_profit_porcent/100)) >= close  
+if profit and salvar_profit_bool_porcent            
+    SL := PE * (1-(mover_stop_profit_porcent/100)) < SL ? PE * (1-(mover_stop_profit_porcent/100)) : SL   
+        
+//Cierre del corto por sobre compra
+strategy.exit(id="Close by exit",from_entry="Corto por sobre compra", stop=shortStop_b1, limit=shortTake_b1)
+strategy.exit(id="Close by exit",from_entry="Corto por tendencia bajista", stop=shortStop_b2, limit=shortTake_b2)
+strategy.exit(id="Close by exit",from_entry="Corto por vela bajista", stop=SL, limit=shortTake_b2)
+    
+
+//PLOT FIXED SLTP LINE
+
+lossLine = plot(vendido ? SL : na, style=plot.style_linebr, color=color.red, linewidth=1, title="Short Fixed SL")
+profitLine = plot(vendido ? TP : na, style=plot.style_linebr, color=color.green, linewidth=1, title="Short Take Profit")
+currentLine = plot(vendido ? PE : na, title = "Middle Line", color = color.white, style = plot.style_linebr)
+fill(currentLine,profitLine, title = "Profit Background" ,color = strategy.position_size < 0 ? color.new(color.green,75) : color.new(color.blue,75))
+fill(currentLine,lossLine, title = "Loss Background" ,color = color.new(color.red,75))
+plot(mm_v, color=color.green)
+plot(mm_a, color=color.yellow)
+plot(mm_r, color=color.red)
+plot(barra_5min, color=color.aqua, linewidth=1)
+//bgcolor(bajista_2 ? color.red : na)
+//bgcolor(tomar_ganancia ? color.green : na)
+//bgcolor(bajista_1 ? color.orange : na)
+//bgcolor(bajista_tendencia ? color.red : na)
+bgcolor(gran_vela_baj  and close > mm_a? color.red : na)
+//
+
+
+

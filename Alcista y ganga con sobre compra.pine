@@ -1,0 +1,484 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © yunioseijo
+
+//@version=5
+strategy('Alcista y ganga con sobre compra', overlay=true, shorttitle='Alcista y ganga con sobre compra', max_bars_back=5000, default_qty_type=strategy.percent_of_equity, default_qty_value=100, commission_type=strategy.commission.percent, commission_value=0.1, initial_capital=1000)
+// ######################### variables y entradas de datos ###########################
+
+//parametros para compras por tendencias alcista
+comprar_alcista = input.bool(defval=true, title='Comprar alcista', group='comprar tendencia alcista')
+limite_comp_largos = input.int(defval=15, title='Porcentaje maximo sobre compra para largos', group='comprar tendencia alcista')
+//TP y SL alcista
+take_profit = input.float(defval=40.0, title='Take profit long, en entradas alcistas', group='comprar tendencia alcista')
+stop_loss = input.float(defval=15.0, title='stop loss long, en entradas alcistas', group='comprar tendencia alcista')
+comprar_vent_cruces = input.bool(defval=false, title='Comprar y vender por cruces', group='comprar tendencia alcista')
+
+cerrar_x_limit = input.bool(defval=false, title='Cierre con precio limit', group='comprar tendencia alcista')
+
+salvar_profit_bool_porcent = input.bool(defval=false, title='Proteger profit cuando alcance %', inline='2', group='comprar tendencia alcista')
+salvar_profit_porcent = input.float(defval=15.0, title='Target Profit', inline='2', group='comprar tendencia alcista')
+mover_stop_profit_porcent = input.int(defval=1, title='Mover el stop a...', inline='2', group='comprar tendencia alcista')
+
+salvar_profit_bool_cond_1 = input.bool(defval=false, title='Proteger profit cuando exista tendencia bajista', inline='4', group='comprar tendencia alcista')
+profit_asegurado_baj_1 = input.string(defval='1 Cuarto', title='Mover el stop a...', inline='4', options=['PE', 'Mitad', '1 Tercio', '1 Cuarto', 'Nada'], group='comprar tendencia alcista')
+
+salvar_profit_bool_cond_2 = input.bool(defval=false, title='Proteger profit cuando exista tendencia bajista 2', inline='3', group='comprar tendencia alcista')
+profit_asegurado_baj_2 = input.string(defval='1 Cuarto', title='Bajista 1 Mover el stop a...', inline='3', options=['PE', 'Mitad', '1 Tercio', '1 Cuarto', 'Nada'], group='comprar tendencia alcista')
+//        = input(defval="Bajista_1", title="Condicion para vender", options=["Bajista_1", "Bajista_2", "Bajista_3", "Bajista_4","Nada"],group="comprar tendencia alcista")
+
+limite_variacion = input.int(defval=12, title='Limite de Variacion de la vela de entrada', group='comprar tendencia alcista')
+
+
+//parametros para compras por ganga
+comprar_gangas = input.bool(defval=false, title='Comprar ganga', group='comprar por ganga')
+limite_vent_largos = input.int(defval=-30, title='Porcentaje maximo sobre venta para largos', group='comprar por ganga')
+//TP y SL ganga
+take_profit_g = input.float(defval=30.0, title='Take profit long, en entradas de ganga', group='comprar por ganga')
+stop_loss_g = input.float(defval=10.0, title='stop loss long, en entradas de ganga', group='comprar por ganga')
+cerrar_posicion_dias = input.bool(defval=true, title='Cerrar posicion por dias en gangas', group='comprar por ganga')
+dias_p_cerrar = input.int(defval=10, title='Cantidad de dias para cerrar', minval=2, maxval=150, group='comprar por ganga')
+salvar_profit_bool_porcent_ganga = input.bool(defval=false, title='Proteger profit cuando alcance %', inline='2', group='comprar por ganga')
+salvar_profit_porcent_ganga = input.float(defval=8.0, title='Target Profit', inline='2', group='comprar por ganga')
+mover_stop_profit_porcent_ganga = input.int(defval=0, title='Mover el stop a...', inline='2', group='comprar por ganga')
+
+
+ver_static = input(defval=false, title='Ver estadisticas')
+
+// parametros media moviles
+per_mm_rapida = input.int(defval=5, title='Media Rapida', minval=2, maxval=150, group='Parametros de medias moviles')
+per_mm_moderada = input.int(defval=15, title='Media moderada', minval=2, maxval=300, group='Parametros de medias moviles')
+per_mm_lenta = input.int(defval=30, title='Media Lenta', minval=5, maxval=500, group='Parametros de medias moviles')
+
+//datos de las bandas de bollinger
+longitud_bb = input.int(defval=21, title='Longitud', group='Parametros Bandas Bollinger')
+multiplicador_bb = input.float(defval=1.5, title='Multiplicador', step=0.1, group='Parametros Bandas Bollinger')
+fuente_bb = input.source(defval=close, title='Fuente', group='Parametros Bandas Bollinger')
+
+
+//parametros de la pendiente
+lookback1 = input.int(defval=1, title='Lookback 1', group='Parametros de la pendiente')
+media_per_pend = input.int(defval=5, title='MA Length', group='Parametros de la pendiente')
+fuente = input.string(defval='EMA', title='1st MA Type', options=['SMA', 'EMA', 'HMA', 'VWMA', 'LSMA'], group='Parametros de la pendiente')
+
+reducir_posicion = input(defval=false, title='Reducir posicion en racha de 2 perdidas')
+capital_x_operacion = input.int(defval=100, title='Capital por Operacion %', minval=1, maxval=100)
+
+// Timeframe {
+backtest_timeframe_start = input.time(defval=timestamp('01 Jan 1900 00:00 +0000'), title='Periodo de inicio')
+USE_ENDTIME = input(defval=false, title='Solo en la fecha  (Falso, usa todo el tiempo disponible)')
+backtest_timeframe_end = input.time(defval=timestamp('01 Jan 2031 00:00 +0000'), title='Fin')
+within_timeframe = time >= backtest_timeframe_start and (time <= backtest_timeframe_end or not USE_ENDTIME)
+// }
+
+
+// Variables de la estrategia
+var lb = label.new(bar_index-30, na, textalign=text.align_right, textcolor=color.white, color=color.black, yloc=yloc.price)
+label.set_style(lb, label.style_label_center)
+mm_v = ta.ema(close, per_mm_rapida)
+mm_a = ta.ema(close, per_mm_moderada)
+mm_r = ta.ema(open, per_mm_lenta)
+mm_lenta = ta.ema(close, per_mm_lenta * 2)
+
+mm_angulo = ta.ema(close, 3)
+var TP = 0.0
+var SL = 0.0
+var currernt = 0.0
+var cont_entry = 1
+var cont_perdidas_cortos = 0
+var cont_perdidas_largos = 0
+var cont_cortos = 0
+var cont_largos = 0
+var cont_largos_acert = 0
+var cont_cortos_acert = 0
+var sobrecomprado = false
+var PE = 0.0
+
+var perdi_por_cambio = 0
+var gananc_con_camb_tend = 0
+var media_corto = false
+var comprado_x_alza = false
+var comprado_x_alza_cruce = false
+var comprado_x_ganga = false
+var comprado_x_bb = false
+var comprado_x_fibo = false
+var racha_perdidas = 0
+var cantidad = 0.0
+var dias_comprados = 0.00
+var dias_vendidos = 0.00
+var dias_debajo_media = 0
+var dias_encima_media = 0
+//variables del fib
+var capital = 0.00
+var perdi = false
+var precio_limit = 0.0
+
+var comprado_x_d_mes = false
+var vendido_x_d_mes = false
+var profit = false
+var profit_ganga = false
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+
+
+// #########################  procesamiento ###########################
+variacion_porciento = math.abs(high - low) * 100 / open
+gran_vela_alc = variacion_porciento > limite_variacion and open < close
+gran_vela_baj = variacion_porciento > limite_variacion and open > close
+porcentaje = close * 100 / mm_r - 100
+sobrecomprado := porcentaje > limite_comp_largos
+
+ema_porcentaje = ta.ema(porcentaje, 30)
+alcista_1 = ema_porcentaje < -10 and ta.crossover(porcentaje, ema_porcentaje)
+bajista_1 = ema_porcentaje > 15 and ta.crossunder(porcentaje, ema_porcentaje)
+bajista_2 = sobrecomprado and gran_vela_baj
+
+
+
+
+// #################### Inicio Calculo de la pendiente #################
+f_hma(_src, _length) =>
+    _return = ta.wma(2 * ta.wma(_src, _length / 2) - ta.wma(_src, _length), math.round(math.sqrt(_length)))
+    _return
+price = close
+price1 = if fuente == 'SMA'
+    ta.sma(price, media_per_pend)
+else
+    if fuente == 'EMA'
+        ta.ema(price, media_per_pend)
+    else
+        if fuente == 'VWMA'
+            ta.vwma(price, media_per_pend)
+        else
+            if fuente == 'LSMA'
+                ta.linreg(price, media_per_pend, 0)
+            else
+                f_hma(price, media_per_pend)
+
+
+roc1 = ta.roc(price1, lookback1) * 63.92
+
+pendiente_alcista = roc1 >= 0
+
+// #################### FIN Calculo de la pendiente #################
+//#######################   Banda de Bollinger  ########################
+
+[mm_bb, banda_superior, banda_inferior] = ta.bb(fuente_bb, longitud_bb, multiplicador_bb)
+var inferior = false
+var rebote = false
+
+if close < banda_inferior
+    inferior := true
+    rebote := false
+    rebote
+if inferior and close > mm_bb
+    rebote := true
+    inferior := false
+    inferior
+else
+    rebote := false
+    rebote
+
+bgcolor(inferior ? color.new(color.red, 90) : na)
+bgcolor(rebote ?color.new(color.lime, 90) : na)
+
+plot(mm_bb, title='media de Bollinger', color=color.new(color.red, 0))
+fill(plot(banda_superior, 'Banda Superior'), plot(banda_inferior, 'Banda Inferior'), color=color.new(color.aqua, 90))
+
+//#######################   End Banda de Bollinger  ########################
+
+
+ganga = porcentaje <= limite_vent_largos
+var alcista = false
+alcista := mm_v > mm_a and mm_a > mm_r and mm_a > mm_lenta and pendiente_alcista and not sobrecomprado and not gran_vela_alc
+alcista_sin_sob_compra = mm_v > mm_a and mm_a > mm_r and mm_a > mm_lenta and pendiente_alcista
+
+
+bajista = mm_v <= mm_a and mm_r < mm_lenta
+//bajista = cruce_1_bajista and rebote and cruce_2_bajista
+//logica de la estrategia
+if not comprado and not vendido and within_timeframe
+    if alcista and comprar_alcista
+        //cantidad a comprar
+        if reducir_posicion and racha_perdidas >= 2
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 200
+            cantidad
+        else if racha_perdidas < 2
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 100
+            cantidad
+        //reliazar compra
+        strategy.entry('Compra por alcista', strategy.long, qty=cantidad, comment='Compra por alcista', alert_message='Compra por alcista' + '\nPrecio:' + str.tostring(close))
+        TP := close * (1 + take_profit / 100)
+        SL := close * (1 - stop_loss / 100)
+        PE := close
+        cont_largos := cont_largos + 1
+        comprado_x_alza := true
+        comprado_x_alza
+
+
+    if comprar_vent_cruces and alcista_sin_sob_compra
+        if reducir_posicion and racha_perdidas >= 2
+            //cantidad a comprar
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 200
+            cantidad
+        else if racha_perdidas < 2
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 100
+            cantidad
+        //reliazar compra
+        strategy.entry('Compra por alcista', strategy.long, qty=cantidad, comment='Compra por alcista', alert_message='Compra por alcista' + '\nPrecio:' + str.tostring(close))
+        PE := close
+        cont_largos := cont_largos + 1
+        comprado_x_alza_cruce := true
+        TP := close * (1 + take_profit / 100)
+        SL := close * (1 - stop_loss / 100)
+        SL
+
+
+    //compra por ganga    
+    if ganga and comprar_gangas
+        //cantidad a comprar
+        if reducir_posicion and racha_perdidas >= 2
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 200
+            cantidad
+        else if racha_perdidas < 2
+            cantidad := math.round(strategy.equity / close) * capital_x_operacion / 100
+            cantidad
+        //reliazar compra
+        strategy.entry('Compra por ganga', strategy.long, qty=cantidad, comment='Compra por ganga', alert_message='Compra por ganga' + '\nPrecio:' + str.tostring(close))
+        TP := close * (1 + take_profit_g / 100)
+        SL := close * (1 - stop_loss_g / 100)
+        PE := close
+        cont_largos := cont_largos + 1
+        comprado_x_ganga := true
+        dias_comprados := bar_index
+        dias_comprados
+
+if comprado
+
+    if comprado_x_alza or comprado_x_alza_cruce
+        profit := PE > 0 and PE * (1 + salvar_profit_porcent / 100) <= close
+        if profit and salvar_profit_bool_porcent
+            SL := PE * (1 + mover_stop_profit_porcent / 100) > SL ? PE * (1 + mover_stop_profit_porcent / 100) : SL
+            SL
+
+
+        if salvar_profit_bool_cond_1 and bajista_1
+            //if profit_asegurado_baj_1 == "Bajista_1" and bajista_1
+            if profit_asegurado_baj_1 == '1 Cuarto'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.25) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.25) : SL
+                SL
+            else if profit_asegurado_baj_1 == '1 Tercio'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.33) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.33) : SL
+                SL
+            else if profit_asegurado_baj_1 == 'PE'
+                SL := PE > SL ? PE : SL
+                SL
+            else if profit_asegurado_baj_1 == 'Mitad'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.50) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.50) : SL
+                SL
+            else if profit_asegurado_baj_1 == 'Nada'
+                SL := SL
+                SL
+        if salvar_profit_bool_cond_2 and bajista_2
+            if profit_asegurado_baj_2 == '1 Cuarto'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.25) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.25) : SL
+                SL
+            else if profit_asegurado_baj_2 == '1 Tercio'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.33) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.33) : SL
+                SL
+            else if profit_asegurado_baj_2 == 'PE'
+                SL := PE > SL ? PE : SL
+                SL
+            else if profit_asegurado_baj_2 == 'Mitad'
+                SL := PE * (1 + salvar_profit_porcent / 100 * 0.50) > SL ? PE * (1 + salvar_profit_porcent / 100 * 0.50) : SL
+                SL
+            else if profit_asegurado_baj_2 == 'Nada'
+                SL := SL
+                SL
+
+    if comprado_x_ganga
+        profit_ganga := PE > 0 and PE * (1 + salvar_profit_porcent_ganga / 100) <= close
+        if profit_ganga and salvar_profit_bool_porcent_ganga
+            SL := PE * (1 + mover_stop_profit_porcent_ganga / 100) > SL ? PE * (1 + mover_stop_profit_porcent_ganga / 100) : SL
+            SL
+
+    if cerrar_x_limit
+        //Cierre del corto por sobre compra
+        strategy.exit(id='Close by exit', from_entry='Compra por alcista', limit=TP, stop=SL, alert_message='Salida')
+        strategy.exit(id='Close by exit', from_entry='Compra por ganga', limit=TP, stop=SL, alert_message='Salida')
+        //cerrar por fib
+
+    //Preguntar por TP
+    if close >= TP
+        strategy.close_all(when=close >= TP, comment='close all entries TP', alert_message='Cierre por TP' + '\nPrecio:' + str.tostring(close))
+        comprado_x_alza := false
+        comprado_x_ganga := false
+        cont_entry := cont_entry + 1
+        //TP := 0
+        //SL := 0
+        //PE := 0
+        racha_perdidas := racha_perdidas - 1
+        cont_largos_acert := cont_largos_acert + 1
+        dias_comprados := 0
+        dias_comprados
+
+
+
+    //preguntar por SL
+    if close <= SL
+        strategy.close_all(when=close <= SL, comment='close all entries', alert_message='Cierre por SL' + '\nPrecio:' + str.tostring(close))
+        cont_entry := cont_entry + 1
+        //TP := 0
+        //SL := 0
+        //PE := 0
+        racha_perdidas := racha_perdidas + 1
+        cont_perdidas_largos := cont_perdidas_largos + 1
+        dias_comprados := 0
+        comprado_x_ganga := false
+        comprado_x_alza := false
+        comprado_x_d_mes := false
+        comprado_x_bb := false
+        comprado_x_bb
+    if comprado_x_alza and mm_v < mm_r and not comprado_x_ganga
+    //cambio de tendncia sin llegar a TP
+        if PE >= close
+            perdi_por_cambio := perdi_por_cambio + 1
+            racha_perdidas := racha_perdidas + 1
+            racha_perdidas
+        if PE < close
+            gananc_con_camb_tend := gananc_con_camb_tend + 1
+            gananc_con_camb_tend
+        strategy.close('Compra por alcista', comment='', alert_message='Cierre' + '\nPrecio:' + str.tostring(close))
+        //TP := 0
+        //SL := 0
+        //PE := 0
+        comprado_x_ganga := false
+        comprado_x_alza := false
+        comprado_x_alza_cruce := false
+        dias_comprados := 0
+        dias_comprados
+
+    if comprado_x_alza_cruce and mm_v <= mm_a and not comprado_x_ganga
+    //cambio de tendncia sin llegar a TP
+        if PE >= close
+            perdi_por_cambio := perdi_por_cambio + 1
+            racha_perdidas := racha_perdidas + 1
+            racha_perdidas
+        if PE < close
+            gananc_con_camb_tend := gananc_con_camb_tend + 1
+            gananc_con_camb_tend
+        strategy.close('Compra por alcista', comment='', alert_message='Cierre' + '\nPrecio:' + str.tostring(close))
+        //TP := 0
+        //SL := 0
+        //PE := 0
+        comprado_x_ganga := false
+        comprado_x_alza := false
+        comprado_x_alza_cruce := false
+        dias_comprados := 0
+        dias_comprados
+
+
+    if cerrar_posicion_dias and comprado_x_ganga and dias_comprados + dias_p_cerrar == bar_index
+        //strategy.close_all("Compra por ganga"), comment = "close all entries", alert_message="Cierre")+"\nPrecio:"+tostring(close))
+        strategy.close('Compra por ganga', comment='close all entries', alert_message='Cierre' + '\nPrecio:' + str.tostring(close))
+        if PE >= close
+            perdi_por_cambio := perdi_por_cambio + 1
+            racha_perdidas := racha_perdidas + 1
+            racha_perdidas
+        if PE < close
+            gananc_con_camb_tend := gananc_con_camb_tend + 1
+            gananc_con_camb_tend
+        //TP := 0
+        //SL := 0
+        //PE := 0
+        comprado_x_ganga := false
+        comprado_x_alza := false
+        dias_comprados := 0
+        dias_comprados
+
+
+if comprado and not within_timeframe
+    strategy.close('Compra', comment='Venta por finalizacion de periodo', alert_message='Cierre por TP' + '\nPrecio:' + str.tostring(close))
+
+
+// estadisticas de la estrategia
+if ver_static
+    texto = ''
+    texto := texto + 'Cantidad de operaciones en largo:' + str.tostring(cont_largos, '0') + ' \n'
+    texto := texto + 'Cantidad de perdidas en largo:' + str.tostring(cont_perdidas_largos, '0') + ' \n'
+    texto := texto + 'Cantidad de perdidas en largo por cambio de tendencia:' + str.tostring(perdi_por_cambio, '0') + '\n'
+    texto := texto + 'Cantidad de aciertos en largo:' + str.tostring(cont_largos_acert, '0') + ' \n'
+    texto := texto + 'Cantidad de aciertos en largo con cambio:' + str.tostring(gananc_con_camb_tend, '0') + ' \n'
+    texto := texto + 'Cantidad de operaciones en corto:' + str.tostring(cont_cortos, '0') + '\n'
+    texto := texto + 'Cantidad de perdidas en corto por SL:' + str.tostring(cont_perdidas_cortos, '0') + '\n'+ '\n'
+//if resumen_parametros
+    texto := texto + 'Resumen de los parametros de la estrategia:'+ '\n'
+    texto := texto + 'Comprar alcista:' + str.tostring(comprar_alcista) + '\n'
+    texto := texto + 'Porcentaje maximo sobre compra para largos:' + str.tostring(limite_comp_largos) + '\n'
+    texto := texto + 'Take profit en entradas alcistas:' + str.tostring(take_profit) + '\n'
+    texto := texto + 'stop loss en entradas alcistas:' + str.tostring(stop_loss) + '\n'
+    texto := texto + 'Comprar y vender por cruces:' + str.tostring(comprar_vent_cruces) + '\n'
+    texto := texto + 'Cierre con precio limit:' + str.tostring(cerrar_x_limit) + '\n'
+    texto := texto + 'Proteger profit cuando alcance %:' + str.tostring(salvar_profit_bool_porcent) + '\n'
+    texto := texto + 'Target Profit % alcanzado:' + str.tostring(salvar_profit_porcent) + '\n'
+    texto := texto + 'Mover el stop a cuando % alcnazado:' + str.tostring(mover_stop_profit_porcent) + '\n'
+    texto := texto + 'Proteger profit cuando exista tendencia bajista:' + str.tostring(salvar_profit_bool_cond_1) + '\n'
+    texto := texto + 'Mover el stop a:' + str.tostring(profit_asegurado_baj_1) + ' por tendencia Bajista'+ '\n'
+    texto := texto + 'Proteger profit cuando exista tendencia bajista 2:' + str.tostring(salvar_profit_bool_cond_2) + '\n'
+    texto := texto + 'Mover el stop a:' + str.tostring(profit_asegurado_baj_2) + ' por tendencia Bajista 2'+ '\n'
+    texto := texto + 'Limite de Variacion de la vela de entrada:' + str.tostring(limite_variacion) + '\n'+ '\n'
+    texto := texto + 'Comprar ganga:' + str.tostring(comprar_gangas) + '\n'
+    texto := texto + 'Porcentaje maximo sobre venta para largos:' + str.tostring(limite_vent_largos) + '\n'
+    texto := texto + 'Take profit en entradas por ganga:' + str.tostring(take_profit_g) + '\n'
+    texto := texto + 'stop loss en entradas por ganga:' + str.tostring(stop_loss_g) + '\n'    
+    texto := texto + 'Cerrar posicion por dias en gangas:' + str.tostring(cerrar_posicion_dias) + '\n'
+    texto := texto + 'Cantidad de dias para cerrar:' + str.tostring(dias_p_cerrar) + '\n'
+    texto := texto + 'Proteger profit cuando alcance %:' + str.tostring(salvar_profit_bool_porcent_ganga) + '\n'
+    texto := texto + 'Target Profit % alcanzado en ganga:' + str.tostring(salvar_profit_porcent_ganga) + '\n'
+    texto := texto + 'Mover el stop a cuando % alcnazado en ganga:' + str.tostring(mover_stop_profit_porcent_ganga) + '\n'+ '\n'
+    
+    texto := texto + 'Media Rapida:' + str.tostring(per_mm_rapida) + '\n'
+    texto := texto + 'Media Moderada:' + str.tostring(per_mm_moderada) + '\n'
+    texto := texto + 'Media Lenta:' + str.tostring(per_mm_lenta) + '\n' + '\n'
+    texto := texto + 'Parametros de la Pendiente:' + '\n'
+    texto := texto + 'Lookback 1:' + str.tostring(lookback1) + '\n'
+    texto := texto + 'MA Length:' + str.tostring(media_per_pend) + '\n'
+    texto := texto + '1st MA Type:' + str.tostring(fuente) + '\n'
+
+
+
+
+    label.set_text(lb, texto)
+    label.set_x(lb, bar_index[10])
+    label.set_y(lb, close)
+
+
+
+// ######################### salida ###########################
+
+//plot(TP > 0 ? TP : na, color=color.green, style=plot.style_circles)
+//plot(SL == 0 ? na : SL , color=color.red, style=plot.style_circles)
+//bgcolor(comprado_x_alza ? color.green : na)
+//bgcolor(cerrar_posicion_dias and comprado_x_ganga ? color.yellow : na)
+bgcolor(alcista ? color.new(color.green, 90) : na)
+bgcolor(bajista_1 ? color.new(color.maroon, 90) : na)
+bgcolor(bajista_2 ? color.new(color.red, 90) : na)
+//bgcolor(bajista  ? color.red : na)
+//bgcolor(salvar_profit_bool_porcent and profit  ? color.aqua : na)
+plotshape(alcista, style=shape.arrowup, location=location.bottom)
+plotshape(bajista_2, style=shape.arrowdown, location=location.top)
+
+
+
+//bgcolor(comprado ? color.lime : na)
+plot(mm_v, color=color.new(color.green, 0))
+plot(mm_a, color=color.new(color.yellow, 0))
+plot(mm_r, color=color.new(color.red, 0))
+
+plot(mm_lenta, color=color.new(color.lime, 0))
+profitLine = plot(comprado ? TP : na, title='Take profit', color=not comprado_x_ganga ? color.green : color.blue, style=plot.style_linebr)
+currentLine = plot(comprado ? PE : na, title='Middle Line', color=color.new(color.white, 0), style=plot.style_linebr)
+lossLine = plot(comprado ? SL : na, title='Stop Loss', color=color.new(color.red, 0), style=plot.style_linebr)
+fill(currentLine, profitLine, title='Profit Background', color=not comprado_x_ganga ? color.new(color.green, 75) : color.new(color.blue, 75))
+fill(currentLine, lossLine, title='Loss Background', color=color.new(color.red, 75) )
+
+

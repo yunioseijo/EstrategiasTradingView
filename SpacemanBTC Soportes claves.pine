@@ -1,0 +1,1235 @@
+//@version=4
+
+//Added additional levels for convienience sake. 
+study("Soportes clavess SpacemanBTC IDWM", shorttitle = "SpacemanBTC Soportes claves", overlay = true)
+
+distanceright = input(defval = 30, title = "Distance", type = input.integer)
+labelsize =  input(defval="Medium",title="Text Size", options=["Small", "Medium", "Large"])
+linesize =  input(defval="Small",title="Line Width", options=["Small", "Medium", "Large"])
+var show_tails = input(defval = false, title = "Always Show", type = input.bool)
+
+
+[daily_time, daily_open] = security(syminfo.tickerid, 'D', [time, open], lookahead = barmerge.lookahead_on)
+[dailyh_time, dailyh_open] = security(syminfo.tickerid, 'D', [time[1], high[1]], lookahead = barmerge.lookahead_on)
+[dailyl_time, dailyl_open] = security(syminfo.tickerid, 'D', [time[1], low[1]], lookahead = barmerge.lookahead_on)
+
+cdailyh_open = security(syminfo.tickerid, 'D',high, lookahead = barmerge.lookahead_on)
+cdailyl_open = security(syminfo.tickerid, 'D',low, lookahead = barmerge.lookahead_on)
+var monday_time = time
+var monday_high = high
+var monday_low = low
+
+[weekly_time, weekly_open] = security(syminfo.tickerid, 'W', [time, open], lookahead = barmerge.lookahead_on)
+[weeklyh_time, weeklyh_open] = security(syminfo.tickerid, 'W', [time[1], high[1]], lookahead = barmerge.lookahead_on)
+[weeklyl_time, weeklyl_open] = security(syminfo.tickerid, 'W', [time[1], low[1]], lookahead = barmerge.lookahead_on)
+
+[monthly_time, monthly_open] = security(syminfo.tickerid, 'M', [time, open], lookahead = barmerge.lookahead_on)
+[monthlyh_time, monthlyh_open] = security(syminfo.tickerid, 'M', [time[1], high[1]], lookahead = barmerge.lookahead_on)
+[monthlyl_time, monthlyl_open] = security(syminfo.tickerid, 'M', [time[1], low[1]], lookahead = barmerge.lookahead_on)
+
+
+[quaterly_time, quaterly_open] = security(syminfo.tickerid, '3M', [time, open], lookahead = barmerge.lookahead_on)
+[quaterlyh_time, quaterlyh_open] = security(syminfo.tickerid, '3M', [time[1], high[1]], lookahead = barmerge.lookahead_on)
+[quaterlyl_time, quaterlyl_open] = security(syminfo.tickerid, '3M', [time[1], low[1]], lookahead = barmerge.lookahead_on)
+
+
+[yearly_time, yearly_open] = security(syminfo.tickerid, '12M', [time, open], lookahead = barmerge.lookahead_on)
+[yearlyh_time, yearlyh_open] = security(syminfo.tickerid, '12M', [time, high], lookahead = barmerge.lookahead_on)
+[yearlyl_time, yearlyl_open] = security(syminfo.tickerid, '12M', [time, low], lookahead = barmerge.lookahead_on)
+
+
+[intra_time, intra_open] = security(syminfo.tickerid, '240', [time, open], lookahead = barmerge.lookahead_on)
+[intrah_time, intrah_open] = security(syminfo.tickerid, '240', [time[1], high[1]], lookahead = barmerge.lookahead_on)
+[intral_time, intral_open] = security(syminfo.tickerid, '240', [time[1], low[1]], lookahead = barmerge.lookahead_on)
+//------------------------------ Inputs -------------------------------
+
+var is_daily_enabled = input(defval = true, title = "Daily Open", type = input.bool, group = "Daily",inline = "Daily")
+var is_dailyrange_enabled = input(defval = false, title = "Previous H/L", type = input.bool, group = "Daily", inline = "Daily")
+var is_dailym_enabled = input(defval = false, title = "Previous Mid", type = input.bool, group = "Daily", inline =  "Daily")
+
+var is_monday_enabled = input(defval = true, title = "Monday Range", type = input.bool, group = "Monday Range")
+var untested_monday = false
+var is_weekly_enabled = input(defval = true, title = "Weekly Open", type = input.bool, group = "Weekly", inline = "Weekly")
+var is_weeklyrange_enabled = input(defval = true, title = "Previous H/L", type = input.bool, group = "Weekly", inline = "Weekly")
+
+
+var is_monthly_enabled = input(defval = true, title = "Monthly Open", type = input.bool, group = "Monthly", inline = "Monthly")
+var is_monthlyrange_enabled = input(defval = true, title = "Previous H/L", type = input.bool, group = "Monthly", inline = "Monthly")
+
+var is_yearly_enabled = input(defval = true, title = "Yearly Open", type = input.bool, group = "Yearly", inline = "Yearly")
+var is_yearlyrange_enabled = input(defval = false, title = "Current H/L", type = input.bool, group = "Yearly", inline = "Yearly")
+
+
+var is_quaterly_enabled = input(defval = true, title = "Quaterly Open", type = input.bool, group = "Quaterly", inline = "Quaterly")
+var is_quaterlyrange_enabled = input(defval = false, title = "Previous H/L", type = input.bool, group = "Quaterly", inline = "Quaterly")
+
+var is_intra_enabled = input(defval = false, title = "4H Open", type = input.bool, group = "4H", inline = "4H")
+var is_intrarange_enabled = input(defval = false, title = "Previous H/L", type = input.bool, group = "4H", inline = "4H")
+var is_intram_enabled = input(defval = false, title = "Previous Mid", type = input.bool, group = "4H", inline =  "4H")
+
+
+DailyColor = input(title="Daily Color", type = input.color, defval = #08bcd4, group = "Daily")
+MondayColor = input(title="Monday Color", type = input.color, defval = color.white, group = "Monday Range")
+WeeklyColor = input(title="Weekly Color", type = input.color, defval = #fffcbc, group = "Weekly")
+MonthlyColor = input(title="Monthly Color", type = input.color, defval = #08d48c,  group = "Monthly")
+YearlyColor = input(title="Yearly Color", type = input.color, defval = color.red,  group = "Yearly")
+QuaterlyColor = input(title="Quaterly Color", type = input.color, defval = color.red,  group = "Quaterly")
+IntraColor = input(title="4H Color", type = input.color, defval = color.orange,  group = "4H")
+
+
+
+
+    //DailyColor := white
+
+if weekly_time != weekly_time[1] 
+    untested_monday := false
+
+if is_monday_enabled == true and untested_monday == false
+    untested_monday := true
+    monday_time := daily_time
+    monday_high := cdailyh_open
+    monday_low := cdailyl_open
+
+
+linewidthint = 1
+if linesize == "Small"
+    linewidthint := 1
+if linesize == "Medium"
+    linewidthint := 2
+if linesize == "Large"
+    linewidthint := 3
+    
+var DEFAULT_LINE_WIDTH = linewidthint
+var DEFAULT_TAIL_WIDTH = linewidthint
+
+fontsize = size.small
+
+if labelsize == "Small"
+    fontsize := size.small
+    
+if labelsize == "Medium"
+    fontsize := size.normal
+
+if labelsize == "Large"
+    fontsize := size.large
+
+var DEFAULT_LABEL_SIZE = fontsize
+var DEFAULT_LABEL_STYLE = label.style_none
+var DEFAULT_TAIL_STYLE = line.style_dotted
+var DEFAULT_EXTEND_RIGHT = distanceright
+
+var daily_line_color = DailyColor
+var daily_line_width = DEFAULT_LINE_WIDTH
+var daily_label_color = DailyColor
+var daily_label_size = DEFAULT_LABEL_SIZE
+var daily_label_style = DEFAULT_LABEL_STYLE
+var daily_tail_width = DEFAULT_LINE_WIDTH
+var daily_tail_color = DailyColor
+var daily_tail_style = DEFAULT_TAIL_STYLE
+var daily_extend_right = DEFAULT_EXTEND_RIGHT
+
+var dailyh_line_color = DailyColor
+var dailyh_line_width = DEFAULT_LINE_WIDTH
+var dailyh_label_color = DailyColor
+var dailyh_label_size = DEFAULT_LABEL_SIZE
+var dailyh_label_style = DEFAULT_LABEL_STYLE
+var dailyh_tail_width = DEFAULT_LINE_WIDTH
+var dailyh_tail_color = DailyColor
+var dailyh_tail_style = DEFAULT_TAIL_STYLE
+var dailyh_extend_right = DEFAULT_EXTEND_RIGHT
+
+var dailyl_line_color = DailyColor
+var dailyl_line_width = DEFAULT_LINE_WIDTH
+var dailyl_label_color = DailyColor
+var dailyl_label_size = DEFAULT_LABEL_SIZE
+var dailyl_label_style = DEFAULT_LABEL_STYLE
+var dailyl_tail_width = DEFAULT_LINE_WIDTH
+var dailyl_tail_color = DailyColor
+var dailyl_tail_style = DEFAULT_TAIL_STYLE
+var dailyl_extend_right = DEFAULT_EXTEND_RIGHT
+
+
+
+
+
+var weekly_line_color = WeeklyColor
+var weekly_line_width = DEFAULT_LINE_WIDTH
+var weekly_label_color = WeeklyColor
+var weekly_label_size = DEFAULT_LABEL_SIZE
+var weekly_label_style = DEFAULT_LABEL_STYLE
+var weekly_tail_width = DEFAULT_LINE_WIDTH
+var weekly_tail_color = WeeklyColor
+var weekly_tail_style = DEFAULT_TAIL_STYLE
+var weekly_extend_right = DEFAULT_EXTEND_RIGHT
+
+var monthly_line_color = MonthlyColor
+var monthly_line_width = DEFAULT_LINE_WIDTH
+var monthly_label_color = MonthlyColor
+var monthly_label_size = DEFAULT_LABEL_SIZE
+var monthly_label_style	= DEFAULT_LABEL_STYLE
+var monthly_tail_width = DEFAULT_LINE_WIDTH
+var monthly_tail_color = MonthlyColor
+var monthly_tail_style = DEFAULT_TAIL_STYLE
+var monthly_extend_right = DEFAULT_EXTEND_RIGHT
+
+var intra_line_color = IntraColor
+var intra_line_width = DEFAULT_LINE_WIDTH
+var intra_label_color = IntraColor
+var intra_label_size = DEFAULT_LABEL_SIZE
+var intra_label_style	= DEFAULT_LABEL_STYLE
+var intra_tail_width = DEFAULT_LINE_WIDTH
+var intra_tail_color = IntraColor
+var intra_tail_style = DEFAULT_TAIL_STYLE
+var intra_extend_right = DEFAULT_EXTEND_RIGHT
+
+var intrah_line_color = IntraColor
+var intrah_line_width = DEFAULT_LINE_WIDTH
+var intrah_label_color = IntraColor
+var intrah_label_size = DEFAULT_LABEL_SIZE
+var intrah_label_style	= DEFAULT_LABEL_STYLE
+var intrah_tail_width = DEFAULT_LINE_WIDTH
+var intrah_tail_color = IntraColor
+var intrah_tail_style = DEFAULT_TAIL_STYLE
+var intrah_extend_right = DEFAULT_EXTEND_RIGHT
+
+var intral_line_color = IntraColor
+var intral_line_width = DEFAULT_LINE_WIDTH
+var intral_label_color = IntraColor
+var intral_label_size = DEFAULT_LABEL_SIZE
+var intral_label_style	= DEFAULT_LABEL_STYLE
+var intral_tail_width = DEFAULT_LINE_WIDTH
+var intral_tail_color = IntraColor
+var intral_tail_style = DEFAULT_TAIL_STYLE
+var intral_extend_right = DEFAULT_EXTEND_RIGHT
+var intram_extend_right = DEFAULT_EXTEND_RIGHT
+
+//------------------------------ Plotting ------------------------------
+
+var can_show_daily = is_daily_enabled and timeframe.isintraday
+var can_show_weekly = is_weekly_enabled and not timeframe.isweekly and not timeframe.ismonthly
+var can_show_monthly = is_monthly_enabled and not timeframe.ismonthly
+
+get_limit_right(bars) =>
+	timenow + (time - time[1]) * bars
+
+// the following code doesn't need to be processed on every candle
+if barstate.islast
+    is_weekly_open = dayofweek == dayofweek.monday
+    is_monthly_open	= dayofmonth == 1
+	can_draw_daily = (is_weekly_enabled ? not is_weekly_open : true) and (is_monthly_enabled ? not is_monthly_open : true)
+	can_draw_weekly = is_monthly_enabled ? not (is_monthly_open and is_weekly_open) : true
+    can_draw_intra = is_intra_enabled
+    can_draw_intrah = is_intrarange_enabled
+    can_draw_intral = is_intrarange_enabled
+    can_draw_intram = is_intram_enabled      
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+    if  can_draw_intra
+        intra_limit_right = get_limit_right(intra_extend_right)
+        
+        if show_tails
+            var intra_tail = line.new(x1 = time,
+               x2 = intra_limit_right,
+               y1 = intra_open,
+               y2 = intra_open,
+               color = intra_tail_color,
+               style = intra_tail_style,
+               width = intra_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(intra_tail, time)
+            line.set_x2(intra_tail, intra_limit_right)
+            line.set_y1(intra_tail, intra_open)
+            line.set_y2(intra_tail, intra_open)
+        
+        
+        
+        var intra_line = line.new(x1 = intra_time,
+           x2 = intra_limit_right,
+           y1 = intra_open,
+           y2 = intra_open,
+           color = intra_line_color,
+           width = intra_line_width,
+           xloc = xloc.bar_time)
+        var intra_label = label.new(x = intra_limit_right,
+           y = intra_open,
+           text = "4H OPEN",
+           style = intra_label_style,
+           textcolor = intra_label_color,
+           size = intra_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(intra_line, intra_time)
+    	line.set_x2(intra_line, intra_limit_right)
+    	line.set_y1(intra_line, intra_open)
+    	line.set_y2(intra_line, intra_open)
+    	label.set_x(intra_label, intra_limit_right)
+        label.set_y(intra_label, intra_open)
+
+//////////////////////////////////////////////////////////////////////////////////
+//HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH HIGH
+    if  can_draw_intrah
+        intrah_limit_right = get_limit_right(intrah_extend_right)
+        
+        if show_tails
+            var intrah_tail = line.new(x1 = time,
+               x2 = intrah_limit_right,
+               y1 = intrah_open,
+               y2 = intrah_open,
+               color = intrah_tail_color,
+               style = intrah_tail_style,
+               width = intrah_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(intrah_tail, time)
+            line.set_x2(intrah_tail, intrah_limit_right)
+            line.set_y1(intrah_tail, intrah_open)
+            line.set_y2(intrah_tail, intrah_open)
+        
+        
+        
+        var intrah_line = line.new(x1 = intrah_time,
+           x2 = intrah_limit_right,
+           y1 = intrah_open,
+           y2 = intrah_open,
+           color = intrah_line_color,
+           width = intrah_line_width,
+           xloc = xloc.bar_time)
+        var intrah_label = label.new(x = intrah_limit_right,
+           y = intrah_open,
+           text = "Previous 4H HIGH",
+           style = intrah_label_style,
+           textcolor = intrah_label_color,
+           size = intrah_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(intrah_line, intrah_time)
+    	line.set_x2(intrah_line, intrah_limit_right)
+    	line.set_y1(intrah_line, intrah_open)
+    	line.set_y2(intrah_line, intrah_open)
+    	label.set_x(intrah_label, intrah_limit_right)
+        label.set_y(intrah_label, intrah_open)
+
+//////////////////////////////////////////////////////////////////////////////////
+//LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW LOW
+    if  can_draw_intral
+        intral_limit_right = get_limit_right(intral_extend_right)
+        
+        if show_tails
+            var intral_tail = line.new(x1 = time,
+               x2 = intral_limit_right,
+               y1 = intral_open,
+               y2 = intral_open,
+               color = intral_tail_color,
+               style = intral_tail_style,
+               width = intral_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(intral_tail, time)
+            line.set_x2(intral_tail, intral_limit_right)
+            line.set_y1(intral_tail, intral_open)
+            line.set_y2(intral_tail, intral_open)
+     
+        
+        var intral_line = line.new(x1 = intral_time,
+           x2 = intral_limit_right,
+           y1 = intral_open,
+           y2 = intral_open,
+           color = intral_line_color,
+           width = intral_line_width,
+           xloc = xloc.bar_time)
+        var intral_label = label.new(x = intral_limit_right,
+           y = intral_open,
+           text = "Previous 4H LOW",
+           style = intral_label_style,
+           textcolor = intral_label_color,
+           size = intral_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(intral_line, intral_time)
+    	line.set_x2(intral_line, intral_limit_right)
+    	line.set_y1(intral_line, intral_open)
+    	line.set_y2(intral_line, intral_open)
+    	label.set_x(intral_label, intral_limit_right)
+        label.set_y(intral_label, intral_open)
+        
+        
+///////////////////////////////////////////////////////////////////////////////   
+       
+    if  can_draw_intram
+        intram_limit_right = get_limit_right(intram_extend_right)
+        intram_time = intrah_time
+        intram_open = (intral_open + intrah_open ) / 2
+        
+        var intram_line = line.new(x1 = intram_time,
+           x2 = intram_limit_right,
+           y1 = intram_open,
+           y2 = intram_open,
+           color = intral_line_color,
+           width = intral_line_width,
+           xloc = xloc.bar_time)
+        var intram_label = label.new(x = intram_limit_right,
+           y = intram_open,
+           text = "Previous 4H MID",
+           style = intral_label_style,
+           textcolor = intral_label_color,
+           size = intral_label_size,
+           xloc = xloc.bar_time)
+        line.set_x1(intram_line, intram_time)
+    	line.set_x2(intram_line, intram_limit_right)
+    	line.set_y1(intram_line, intram_open)
+    	line.set_y2(intram_line, intram_open)
+    	label.set_x(intram_label, intram_limit_right)
+        label.set_y(intram_label, intram_open)
+        //
+        
+////////////////////////////////////////// MONDAY
+
+    if is_monday_enabled
+        monday_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        // draw tails before lines for better visual
+        if show_tails
+            var monday_tail = line.new(x1 = time,
+               x2 = monday_limit_right,
+               y1 = monday_high,
+               y2 = monday_high,
+               color = MondayColor,
+               style = daily_tail_style,
+               width = daily_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(monday_tail, time)
+            line.set_x2(monday_tail, monday_limit_right)
+            line.set_y1(monday_tail, monday_high)
+            line.set_y2(monday_tail, monday_high)
+
+        var monday_line = line.new(x1 = monday_time,
+           x2 = monday_limit_right,
+           y1 = monday_high,
+           y2 = monday_high,
+           color = MondayColor,
+           width = daily_line_width,
+           xloc = xloc.bar_time)
+        var monday_label = label.new(x = monday_limit_right,
+           y = monday_high,
+           text = "Monday High",
+           style = daily_label_style,
+           textcolor = MondayColor,
+           size = daily_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(monday_line, monday_time)
+    	line.set_x2(monday_line, monday_limit_right)
+    	line.set_y1(monday_line, monday_high)
+    	line.set_y2(monday_line, monday_high)
+    	label.set_x(monday_label, monday_limit_right)
+        label.set_y(monday_label, monday_high)
+        
+        
+     
+    if is_monday_enabled
+        monday_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        // draw tails before lines for better visual
+        if show_tails
+            var monday_low_tail = line.new(x1 = time,
+               x2 = monday_limit_right,
+               y1 = monday_low,
+               y2 = monday_low,
+               color = MondayColor,
+               style = daily_tail_style,
+               width = daily_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(monday_low_tail, time)
+            line.set_x2(monday_low_tail, monday_limit_right)
+            line.set_y1(monday_low_tail, monday_low)
+            line.set_y2(monday_low_tail, monday_low)
+
+        var monday_low_line = line.new(x1 = monday_time,
+           x2 = monday_limit_right,
+           y1 = monday_low,
+           y2 = monday_low,
+           color = MondayColor,
+           width = daily_line_width,
+           xloc = xloc.bar_time)
+        var monday_low_label = label.new(x = monday_limit_right,
+           y = monday_low,
+           text = "Monday Low",
+           style = daily_label_style,
+           textcolor = MondayColor,
+           size = daily_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(monday_low_line, monday_time)
+    	line.set_x2(monday_low_line, monday_limit_right)
+    	line.set_y1(monday_low_line, monday_low)
+    	line.set_y2(monday_low_line, monday_low)
+    	label.set_x(monday_low_label, monday_limit_right)
+        label.set_y(monday_low_label, monday_low)   
+        
+    
+        
+        
+//////////////////////////////////////////////////////////////////////////////////
+////////////////////////DAILY OPEN DAILY OPEN DAILY OPEN DAILY OPEN DAILY OPEN DAILY OPEN DAILY OPEN
+
+    if can_show_daily and can_draw_daily
+        daily_limit_right = get_limit_right(daily_extend_right)
+        
+        // draw tails before lines for better visual
+        if show_tails
+            var daily_tail = line.new(x1 = time,
+               x2 = daily_limit_right,
+               y1 = daily_open,
+               y2 = daily_open,
+               color = daily_tail_color,
+               style = daily_tail_style,
+               width = daily_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(daily_tail, time)
+            line.set_x2(daily_tail, daily_limit_right)
+            line.set_y1(daily_tail, daily_open)
+            line.set_y2(daily_tail, daily_open)
+
+        var daily_line = line.new(x1 = daily_time,
+           x2 = daily_limit_right,
+           y1 = daily_open,
+           y2 = daily_open,
+           color = daily_line_color,
+           width = daily_line_width,
+           xloc = xloc.bar_time)
+        var daily_label = label.new(x = daily_limit_right,
+           y = daily_open,
+           text = "Daily Open",
+           style = daily_label_style,
+           textcolor = daily_label_color,
+           size = daily_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(daily_line, daily_time)
+    	line.set_x2(daily_line, daily_limit_right)
+    	line.set_y1(daily_line, daily_open)
+    	line.set_y2(daily_line, daily_open)
+    	label.set_x(daily_label, daily_limit_right)
+        label.set_y(daily_label, daily_open)
+        
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////DAILY HIGH DAILY HIGH DAILY HIGH DAILY HIGH DAILY HIGH DAILY HIGH DAILY HIGH 
+    
+    if is_dailyrange_enabled
+        dailyh_limit_right = get_limit_right(dailyh_extend_right)
+        
+        // draw tails before lines for better visual
+        if show_tails
+            var dailyh_tail = line.new(x1 = time,
+               x2 = dailyh_limit_right,
+               y1 = dailyh_open,
+               y2 = dailyh_open,
+               color = dailyh_tail_color,
+               style = dailyh_tail_style,
+               width = dailyh_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(dailyh_tail, time)
+            line.set_x2(dailyh_tail, dailyh_limit_right)
+            line.set_y1(dailyh_tail, dailyh_open)
+            line.set_y2(dailyh_tail, dailyh_open)
+
+        var dailyh_line = line.new(x1 = dailyh_time,
+           x2 = dailyh_limit_right,
+           y1 = dailyh_open,
+           y2 = dailyh_open,
+           color = dailyh_line_color,
+           width = dailyh_line_width,
+           xloc = xloc.bar_time)
+        var dailyh_label = label.new(x = dailyh_limit_right,
+           y = dailyh_open,
+           text = "Previous Daily High",
+           style = dailyh_label_style,
+           textcolor = dailyh_label_color,
+           size = dailyh_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(dailyh_line, dailyh_time)
+    	line.set_x2(dailyh_line, dailyh_limit_right)
+    	line.set_y1(dailyh_line, dailyh_open)
+    	line.set_y2(dailyh_line, dailyh_open)
+    	label.set_x(dailyh_label, dailyh_limit_right)
+        label.set_y(dailyh_label, dailyh_open)
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+//////////////////DAILY LOW DAILY LOW DAILY LOW DAILY LOW DAILY LOW DAILY LOW DAILY LOW DAILY LOW 
+
+    if is_dailyrange_enabled
+        dailyl_limit_right = get_limit_right(dailyl_extend_right)
+        
+        // draw tails before lines for better visual
+        if show_tails
+            var dailyl_tail = line.new(x1 = time,
+               x2 = dailyl_limit_right,
+               y1 = dailyl_open,
+               y2 = dailyl_open,
+               color = dailyl_tail_color,
+               style = dailyl_tail_style,
+               width = dailyl_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(dailyl_tail, time)
+            line.set_x2(dailyl_tail, dailyl_limit_right)
+            line.set_y1(dailyl_tail, dailyl_open)
+            line.set_y2(dailyl_tail, dailyl_open)
+
+        var dailyl_line = line.new(x1 = dailyl_time,
+           x2 = dailyl_limit_right,
+           y1 = dailyl_open,
+           y2 = dailyl_open,
+           color = dailyl_line_color,
+           width = dailyl_line_width,
+           xloc = xloc.bar_time)
+        var dailyl_label = label.new(x = dailyl_limit_right,
+           y = dailyl_open,
+           text = "Previous Daily Low",
+           style = dailyl_label_style,
+           textcolor = dailyl_label_color,
+           size = dailyl_label_size,
+           xloc = xloc.bar_time)
+
+    	line.set_x1(dailyl_line, dailyl_time)
+    	line.set_x2(dailyl_line, dailyl_limit_right)
+    	line.set_y1(dailyl_line, dailyl_open)
+    	line.set_y2(dailyl_line, dailyl_open)
+    	label.set_x(dailyl_label, dailyl_limit_right)
+        label.set_y(dailyl_label, dailyl_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////// Daily MID
+       
+    if  is_dailym_enabled  
+        dailym_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        dailym_time = dailyh_time
+        dailym_open = (dailyl_open + dailyh_open ) / 2
+        
+        var dailym_line = line.new(x1 = dailym_time,
+           x2 = dailym_limit_right,
+           y1 = dailym_open,
+           y2 = dailym_open,
+           color = dailyl_line_color,
+           width = dailyl_line_width,
+           xloc = xloc.bar_time)
+        var dailym_label = label.new(x = dailym_limit_right,
+           y = dailym_open,
+           text = "Previous Day MID",
+           style = dailyl_label_style,
+           textcolor = dailyl_label_color,
+           size = dailyl_label_size,
+           xloc = xloc.bar_time)
+        line.set_x1(dailym_line, dailym_time)
+    	line.set_x2(dailym_line, dailym_limit_right)
+    	line.set_y1(dailym_line, dailym_open)
+    	line.set_y2(dailym_line, dailym_open)
+    	label.set_x(dailym_label, dailym_limit_right)
+        label.set_y(dailym_label, dailym_open)
+        //
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+    if can_show_weekly and can_draw_weekly
+        weekly_limit_right = get_limit_right(weekly_extend_right)
+        
+        if show_tails
+            var weekly_tail = line.new(x1 = time,
+               x2 = weekly_limit_right,
+               y1 = weekly_open,
+               y2 = weekly_open,
+               color = weekly_tail_color,
+               style = weekly_tail_style,
+               width = weekly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(weekly_tail, time)
+            line.set_x2(weekly_tail, weekly_limit_right)
+            line.set_y1(weekly_tail, weekly_open)
+            line.set_y2(weekly_tail, weekly_open)
+
+        var weekly_line = line.new(x1 = weekly_time,
+           x2 = weekly_limit_right,
+           y1 = weekly_open,
+           y2 = weekly_open,
+           color = weekly_line_color,
+           width = weekly_line_width,
+           xloc = xloc.bar_time)
+        var weekly_label = label.new(x = weekly_limit_right,
+           y = weekly_open,
+           text = "Weekly Open",
+           style = weekly_label_style,
+           textcolor = weekly_label_color,
+           size = monthly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(weekly_line, weekly_time)
+    	line.set_x2(weekly_line, weekly_limit_right)
+    	line.set_y1(weekly_line, weekly_open)
+    	line.set_y2(weekly_line, weekly_open)
+    	label.set_x(weekly_label, weekly_limit_right)
+    	label.set_y(weekly_label, weekly_open)
+
+    	// the weekly open can be the daily open too (monday)
+        // only the weekly will be draw, in these case we update its label
+	    if is_weekly_open and can_show_daily
+            label.set_text(weekly_label, "DO / WO            ")
+
+//////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////// WEEKLY HIGH WEEKLY HIGH WEEKLY HIGH
+
+
+    if is_weeklyrange_enabled
+        weeklyh_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var weeklyh_tail = line.new(x1 = time,
+               x2 = weeklyh_limit_right,
+               y1 = weeklyh_open,
+               y2 = weeklyh_open,
+               color = weekly_tail_color,
+               style = weekly_tail_style,
+               width = weekly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(weeklyh_tail, time)
+            line.set_x2(weeklyh_tail, weeklyh_limit_right)
+            line.set_y1(weeklyh_tail, weeklyh_open)
+            line.set_y2(weeklyh_tail, weeklyh_open)
+
+        var weeklyh_line = line.new(x1 = weeklyh_time,
+           x2 = weeklyh_limit_right,
+           y1 = weeklyh_open,
+           y2 = weeklyh_open,
+           color = weekly_line_color,
+           width = weekly_line_width,
+           xloc = xloc.bar_time)
+        var weeklyh_label = label.new(x = weeklyh_limit_right,
+           y = weeklyh_open,
+           text = "Previous Weekly High",
+           style = weekly_label_style,
+           textcolor = weekly_label_color,
+           size = weekly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(weeklyh_line, weeklyh_time)
+    	line.set_x2(weeklyh_line, weeklyh_limit_right)
+    	line.set_y1(weeklyh_line, weeklyh_open)
+    	line.set_y2(weeklyh_line, weeklyh_open)
+    	label.set_x(weeklyh_label, weeklyh_limit_right)
+    	label.set_y(weeklyh_label, weeklyh_open)
+
+
+//////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////// WEEKLY LOW WEEKLY LOW WEEKLY LOW
+
+
+    if is_weeklyrange_enabled
+        weeklyl_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var weeklyl_tail = line.new(x1 = time,
+               x2 = weeklyl_limit_right,
+               y1 = weeklyl_open,
+               y2 = weeklyl_open,
+               color = weekly_tail_color,
+               style = weekly_tail_style,
+               width = weekly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(weeklyl_tail, time)
+            line.set_x2(weeklyl_tail, weeklyl_limit_right)
+            line.set_y1(weeklyl_tail, weeklyl_open)
+            line.set_y2(weeklyl_tail, weeklyl_open)
+
+        var weeklyl_line = line.new(x1 = weekly_time,
+           x2 = weeklyl_limit_right,
+           y1 = weekly_open,
+           y2 = weekly_open,
+           color = weekly_line_color,
+           width = weekly_line_width,
+           xloc = xloc.bar_time)
+        var weeklyl_label = label.new(x = weeklyl_limit_right,
+           y = weeklyl_open,
+           text = "Previous Weekly Low",
+           style = weekly_label_style,
+           textcolor = weekly_label_color,
+           size = weekly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(weeklyl_line, weeklyl_time)
+    	line.set_x2(weeklyl_line, weeklyl_limit_right)
+    	line.set_y1(weeklyl_line, weeklyl_open)
+    	line.set_y2(weeklyl_line, weeklyl_open)
+    	label.set_x(weeklyl_label, weeklyl_limit_right)
+    	label.set_y(weeklyl_label, weeklyl_open)
+
+  
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////// YEEEAARRLLYY LOW LOW LOW
+
+
+    if is_yearlyrange_enabled
+        yearlyl_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var yearlyl_tail = line.new(x1 = time,
+               x2 = yearlyl_limit_right,
+               y1 = yearlyl_open,
+               y2 = yearlyl_open,
+               color = YearlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(yearlyl_tail, time)
+            line.set_x2(yearlyl_tail, yearlyl_limit_right)
+            line.set_y1(yearlyl_tail, yearlyl_open)
+            line.set_y2(yearlyl_tail, yearlyl_open)
+
+        var yearlyl_line = line.new(x1 = yearlyl_time,
+           x2 = yearlyl_limit_right,
+           y1 = yearlyl_open,
+           y2 = yearlyl_open,
+           color = YearlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var yearlyl_label = label.new(x = yearlyl_limit_right,
+           y = yearlyl_open,
+           text = "Current Yearly Low",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = YearlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(yearlyl_line, yearlyl_time)
+    	line.set_x2(yearlyl_line, yearlyl_limit_right)
+    	line.set_y1(yearlyl_line, yearlyl_open)
+    	line.set_y2(yearlyl_line, yearlyl_open)
+    	label.set_x(yearlyl_label, yearlyl_limit_right)
+    	label.set_y(yearlyl_label, yearlyl_open)
+
+  
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////// YEEEAARRLLYY HIGH HIGH HIGH
+
+
+    if is_yearlyrange_enabled
+        yearlyh_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var yearlyh_tail = line.new(x1 = time,
+               x2 = yearlyh_limit_right,
+               y1 = yearlyh_open,
+               y2 = yearlyh_open,
+               color = YearlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(yearlyh_tail, time)
+            line.set_x2(yearlyh_tail, yearlyh_limit_right)
+            line.set_y1(yearlyh_tail, yearlyh_open)
+            line.set_y2(yearlyh_tail, yearlyh_open)
+
+        var yearlyh_line = line.new(x1 = yearlyh_time,
+           x2 = yearlyh_limit_right,
+           y1 = yearlyh_open,
+           y2 = yearlyh_open,
+           color = YearlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var yearlyh_label = label.new(x = yearlyh_limit_right,
+           y = yearlyh_open,
+           text = "Current Yearly High",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = YearlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(yearlyh_line, yearlyh_time)
+    	line.set_x2(yearlyh_line, yearlyh_limit_right)
+    	line.set_y1(yearlyh_line, yearlyh_open)
+    	line.set_y2(yearlyh_line, yearlyh_open)
+    	label.set_x(yearlyh_label, yearlyh_limit_right)
+    	label.set_y(yearlyh_label, yearlyh_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+////////////////////////////////////////////////////////////////////////////////// YEEEAARRLLYY OPEN
+
+
+    if is_yearly_enabled
+        yearly_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var yearly_tail = line.new(x1 = time,
+               x2 = yearly_limit_right,
+               y1 = yearly_open,
+               y2 = yearly_open,
+               color = YearlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(yearly_tail, time)
+            line.set_x2(yearly_tail, yearly_limit_right)
+            line.set_y1(yearly_tail, yearly_open)
+            line.set_y2(yearly_tail, yearly_open)
+
+        var yearly_line = line.new(x1 = yearly_time,
+           x2 = yearly_limit_right,
+           y1 = yearly_open,
+           y2 = yearly_open,
+           color = YearlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var yearly_label = label.new(x = yearly_limit_right,
+           y = yearly_open,
+           text = "Yearly Open",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = YearlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(yearly_line, yearly_time)
+    	line.set_x2(yearly_line, yearly_limit_right)
+    	line.set_y1(yearly_line, yearly_open)
+    	line.set_y2(yearly_line, yearly_open)
+    	label.set_x(yearly_label, yearly_limit_right)
+    	label.set_y(yearly_label, yearly_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////// QUATERLLYYYYY OPEN
+
+
+    if is_quaterly_enabled
+        quaterly_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var quaterly_tail = line.new(x1 = time,
+               x2 = quaterly_limit_right,
+               y1 = quaterly_open,
+               y2 = quaterly_open,
+               color = QuaterlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(quaterly_tail, time)
+            line.set_x2(quaterly_tail, quaterly_limit_right)
+            line.set_y1(quaterly_tail, quaterly_open)
+            line.set_y2(quaterly_tail, quaterly_open)
+
+        var quaterly_line = line.new(x1 = quaterly_time,
+           x2 = quaterly_limit_right,
+           y1 = quaterly_open,
+           y2 = quaterly_open,
+           color = QuaterlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var quaterly_label = label.new(x = quaterly_limit_right,
+           y = quaterly_open,
+           text = "Quaterly Open",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = QuaterlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(quaterly_line, quaterly_time)
+    	line.set_x2(quaterly_line, quaterly_limit_right)
+    	line.set_y1(quaterly_line, quaterly_open)
+    	line.set_y2(quaterly_line, quaterly_open)
+    	label.set_x(quaterly_label, quaterly_limit_right)
+    	label.set_y(quaterly_label, quaterly_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////// QUATERLLYYYYY High
+
+
+    if is_quaterlyrange_enabled
+        quaterlyh_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var quaterlyh_tail = line.new(x1 = time,
+               x2 = quaterlyh_limit_right,
+               y1 = quaterlyh_open,
+               y2 = quaterlyh_open,
+               color = QuaterlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(quaterlyh_tail, time)
+            line.set_x2(quaterlyh_tail, quaterlyh_limit_right)
+            line.set_y1(quaterlyh_tail, quaterlyh_open)
+            line.set_y2(quaterlyh_tail, quaterlyh_open)
+
+        var quaterlyh_line = line.new(x1 = quaterlyh_time,
+           x2 = quaterlyh_limit_right,
+           y1 = quaterlyh_open,
+           y2 = quaterlyh_open,
+           color = QuaterlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var quaterlyh_label = label.new(x = quaterlyh_limit_right,
+           y = quaterlyh_open,
+           text = "Previous Quaterly High",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = QuaterlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(quaterlyh_line, quaterlyh_time)
+    	line.set_x2(quaterlyh_line, quaterlyh_limit_right)
+    	line.set_y1(quaterlyh_line, quaterlyh_open)
+    	line.set_y2(quaterlyh_line, quaterlyh_open)
+    	label.set_x(quaterlyh_label, quaterlyh_limit_right)
+    	label.set_y(quaterlyh_label, quaterlyh_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+////////////////////////////////////////////////////////////////////////////////// QUATERLLYYYYY Low
+
+
+    if is_quaterlyrange_enabled
+        quaterlyl_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var quaterlyl_tail = line.new(x1 = time,
+               x2 = quaterlyl_limit_right,
+               y1 = quaterlyl_open,
+               y2 = quaterlyl_open,
+               color = QuaterlyColor,
+               style = DEFAULT_TAIL_STYLE,
+               width = DEFAULT_TAIL_WIDTH,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(quaterlyl_tail, time)
+            line.set_x2(quaterlyl_tail, quaterlyl_limit_right)
+            line.set_y1(quaterlyl_tail, quaterlyl_open)
+            line.set_y2(quaterlyl_tail, quaterlyl_open)
+
+        var quaterlyl_line = line.new(x1 = quaterlyl_time,
+           x2 = quaterlyl_limit_right,
+           y1 = quaterlyl_open,
+           y2 = quaterlyl_open,
+           color = QuaterlyColor,
+           width = DEFAULT_LINE_WIDTH,
+           xloc = xloc.bar_time)
+        var quaterlyl_label = label.new(x = quaterlyl_limit_right,
+           y = quaterlyl_open,
+           text = "Previous Quaterly Low",
+           style = DEFAULT_LABEL_STYLE,
+           textcolor = QuaterlyColor,
+           size = DEFAULT_LABEL_SIZE,
+           xloc = xloc.bar_time)
+
+        line.set_x1(quaterlyl_line, quaterlyl_time)
+    	line.set_x2(quaterlyl_line, quaterlyl_limit_right)
+    	line.set_y1(quaterlyl_line, quaterlyl_open)
+    	line.set_y2(quaterlyl_line, quaterlyl_open)
+    	label.set_x(quaterlyl_label, quaterlyl_limit_right)
+    	label.set_y(quaterlyl_label, quaterlyl_open)
+
+
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+
+////////////////////////////////////////////////////////////////////////////////// Monthly LOW LOW LOW
+
+
+    if is_monthlyrange_enabled
+        monthlyl_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var monthlyl_tail = line.new(x1 = time,
+               x2 = monthlyl_limit_right,
+               y1 = monthlyl_open,
+               y2 = monthlyl_open,
+               color = monthly_tail_color,
+               style = monthly_tail_style,
+               width = monthly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(monthlyl_tail, time)
+            line.set_x2(monthlyl_tail, monthlyl_limit_right)
+            line.set_y1(monthlyl_tail, monthlyl_open)
+            line.set_y2(monthlyl_tail, monthlyl_open)
+
+        var monthlyl_line = line.new(x1 = monthly_time,
+           x2 = monthlyl_limit_right,
+           y1 = monthlyl_open,
+           y2 = monthlyl_open,
+           color = monthly_line_color,
+           width = monthly_line_width,
+           xloc = xloc.bar_time)
+        var monthlyl_label = label.new(x = monthlyl_limit_right,
+           y = monthlyl_open,
+           text = "Previous Monthly Low",
+           style = monthly_label_style,
+           textcolor = monthly_label_color,
+           size = monthly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(monthlyl_line, monthlyl_time)
+    	line.set_x2(monthlyl_line, monthlyl_limit_right)
+    	line.set_y1(monthlyl_line, monthlyl_open)
+    	line.set_y2(monthlyl_line, monthlyl_open)
+    	label.set_x(monthlyl_label, monthlyl_limit_right)
+    	label.set_y(monthlyl_label, monthlyl_open)
+
+    	// the weekly open can be the daily open too (monday)
+        // only the weekly will be draw, in these case we update its label
+
+
+//////////////////////////////////////////////////////////////////////////////////
+////////////////////////////////////////////////////////////////////////////////// MONTHLY HIGH HIGH HIGH
+
+
+
+    if is_monthlyrange_enabled
+        monthlyh_limit_right = get_limit_right(DEFAULT_EXTEND_RIGHT)
+        
+        if show_tails
+            var monthlyh_tail = line.new(x1 = time,
+               x2 = monthlyh_limit_right,
+               y1 = monthlyh_open,
+               y2 = monthlyh_open,
+               color = monthly_tail_color,
+               style = monthly_tail_style,
+               width = monthly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(monthlyh_tail, time)
+            line.set_x2(monthlyh_tail, monthlyh_limit_right)
+            line.set_y1(monthlyh_tail, monthlyh_open)
+            line.set_y2(monthlyh_tail, monthlyh_open)
+
+        var monthlyh_line = line.new(x1 = monthly_time,
+           x2 = monthlyh_limit_right,
+           y1 = monthlyh_open,
+           y2 = monthlyh_open,
+           color = monthly_line_color,
+           width = monthly_line_width,
+           xloc = xloc.bar_time)
+        var monthlyh_label = label.new(x = monthlyh_limit_right,
+           y = monthlyh_open,
+           text = "Previous Monthly High",
+           style = monthly_label_style,
+           textcolor = monthly_label_color,
+           size = monthly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(monthlyh_line, monthlyl_time)
+    	line.set_x2(monthlyh_line, monthlyh_limit_right)
+    	line.set_y1(monthlyh_line, monthlyh_open)
+    	line.set_y2(monthlyh_line, monthlyh_open)
+    	label.set_x(monthlyh_label, monthlyh_limit_right)
+    	label.set_y(monthlyh_label, monthlyh_open)
+
+    	// the weekly open can be the daily open too (monday)
+        // only the weekly will be draw, in these case we update its label
+
+
+//////////////////////////////////////////////////////////////////////////////////
+
+
+
+    if can_show_monthly
+        monthly_limit_right = get_limit_right(monthly_extend_right)
+        
+        if show_tails
+            var monthly_tail = line.new(x1 = time,
+               x2 = monthly_limit_right,
+               y1 = monthly_open,
+               y2 = monthly_open,
+               color = monthly_tail_color,
+               style = monthly_tail_style,
+               width = monthly_tail_width,
+               extend = extend.left,
+               xloc = xloc.bar_time)
+            line.set_x1(monthly_tail, time)
+            line.set_x2(monthly_tail, monthly_limit_right)
+            line.set_y1(monthly_tail, monthly_open)
+            line.set_y2(monthly_tail, monthly_open)
+        
+        var monthlyLine = line.new(x1 = monthly_time,
+           x2 = monthly_limit_right,
+           y1 = monthly_open,
+           y2 = monthly_open,
+           color = monthly_line_color,
+           width = monthly_line_width,
+           xloc = xloc.bar_time)
+        var monthlyLabel = label.new(x = monthly_limit_right,
+           y = monthly_open, text = "Monthly Open",
+           style = monthly_label_style,
+           textcolor = monthly_label_color,
+           size = monthly_label_size,
+           xloc = xloc.bar_time)
+
+        line.set_x1(monthlyLine, monthly_time)
+    	line.set_x2(monthlyLine, monthly_limit_right)
+    	line.set_y1(monthlyLine, monthly_open)
+    	line.set_y2(monthlyLine, monthly_open)
+    	label.set_x(monthlyLabel, monthly_limit_right)
+        label.set_y(monthlyLabel, monthly_open)
+
+/////////////////////////////////////////////////////////////////////////////
+        // the monthly open can be the weekly open (monday 1st) and/or daily open too
+        // only the monthly will be draw, in these case we update its label
+        if is_monthly_open
+            if can_show_daily
+                label.set_text(monthlyLabel, "DO / MO            ")
+            if is_weekly_open
+                if can_show_weekly
+                    label.set_text(monthlyLabel, "WO / MO            ")
+                if can_show_daily and can_show_weekly
+                    label.set_text(monthlyLabel, "DO / WO / MO                ")
+
+        // the start of the line is drew from the first week of the month
+        // if the first day of the weekly candle (monday) is the 2nd of the month
+        // we fix the start of the line position on the previous weekly candle
+        if timeframe.isweekly and dayofweek(monthly_time) != dayofweek.monday
+            line.set_x1(monthlyLine, monthly_time - (weekly_time - weekly_time[1]))

@@ -1,0 +1,55 @@
+// This source code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © adrianmprusia
+
+//@version=4
+strategy("Scalping 1", overlay=true, default_qty_value = 150)
+
+cci= cci(close, 200)
+ema_r = ema(close, 10)
+ema_az = ema(close, 21)
+ema_v = ema(close, 50)
+
+plot(ema_r, color=color.red)
+plot(ema_az, color=color.aqua)
+plot(ema_v, color=color.green)
+// Variables de la estrategia
+var TP = 0.0
+var SL = 0.0
+var PE = 0.0
+var cont_entry = 0
+comprado = strategy.position_size > 0
+vendido = strategy.position_size < 0
+var alcista =false
+alcista := cci>50 and ema_r>ema_az and ema_r>ema_v
+var bajista =false
+bajista := cci<0 and ema_r<ema_az and ema_r<ema_v
+
+
+if not comprado and not vendido
+    //strategy.entry(id, long, qty, limit, stop, oca_name, oca_type, comment, when, alert_message)
+    if alcista
+        strategy.entry("Compra por alcista"+tostring(cont_entry), strategy.long, comment="Compra por alcista"+tostring(cont_entry), alert_message="Compra por alcista"+tostring(cont_entry)+"\nPrecio:"+tostring(close))
+        PE := close
+        TP := PE *1.20
+        SL := PE * 0.97
+        cont_entry := cont_entry + 1
+    //strategy.entry("My Short Entry Id", strategy.short, when=bajista)
+
+//strategy.exit(id, from_entry, qty, qty_percent, profit, limit, loss, stop, trail_price, trail_points, trail_offset, oca_name, comment, when, alert_message) → void
+if comprado
+    strategy.exit("Salida", "Compra por alcista"+tostring(cont_entry-1), limit=TP, stop=SL, comment="Compra por alcista"+tostring(cont_entry-1), alert_message="Compra por alcista"+tostring(cont_entry-1)+"\nPrecio:"+tostring(close))
+    if bajista
+        SL := close
+    //strategy.close_all(when=bajista, comment="Compra por alcista"+tostring(cont_entry-1), alert_message="Compra por alcista"+tostring(cont_entry-1)+"\nPrecio:"+tostring(close))
+
+
+bgcolor(alcista ? color.green : na)
+bgcolor(comprado  ? color.aqua : na)
+bgcolor(bajista ? color.red : na)
+profitLine = plot(comprado ? TP : na, title = "Take profit", color = color.green, style = plot.style_linebr)
+currentLine =plot(comprado ? PE : na, title = "Middle Line", color = color.white, style = plot.style_linebr)
+lossLine = plot(comprado ? SL : na, title = "Stop Loss", color = color.red, style = plot.style_linebr)
+fill(currentLine,profitLine, title = "Profit Background" ,color =color.new(color.green,75) )
+fill(currentLine,lossLine, title = "Loss Background" ,color = color.new(color.red,75))
+
+
